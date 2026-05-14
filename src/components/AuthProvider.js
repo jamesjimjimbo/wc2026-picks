@@ -16,44 +16,75 @@ export function AuthProvider({ children }) {
       setLoading(false);
       return;
     }
-    
-    // Get initial session
-    supabase.auth.getSession().then(({ data: { session } }) => {
-      setUser(session?.user ?? null);
-      if (session?.user) fetchProfile(session.user.id);
-      else setLoading(false);
-    });
 
-    // Listen for auth changes
+    let mounted = true;
+
+    async function init() {
+      try {
+        const { data: { session }, error } = await supabase.auth.getSession();
+
+        if (!mounted) return;
+
+        if (error || !session?.user) {
+          setUser(null);
+          setProfile(null);
+          setLoading(false);
+          return;
+        }
+
+        setUser(session.user);
+
+        const { data: profileData } = await supabase
+          .from('profiles')
+          .select('*')
+          .eq('id', session.user.id)
+          .single();
+
+        if (!mounted) return;
+
+        setProfile(profileData || null);
+        setLoading(false);
+
+      } catch (e) {
+        console.error('Auth init error:', e);
+        if (mounted) {
+          setUser(null);
+          setProfile(null);
+          setLoading(false);
+        }
+      }
+    }
+
+    init();
+
     const { data: { subscription } } = supabase.auth.onAuthStateChange(
       async (event, session) => {
-        setUser(session?.user ?? null);
-        if (session?.user) await fetchProfile(session.user.id);
-        else {
+        if (!mounted) return;
+
+        if (session?.user) {
+          setUser(session.user);
+          const { data: profileData } = await supabase
+            .from('profiles')
+            .select('*')
+            .eq('id', session.user.id)
+            .single();
+          if (mounted) {
+            setProfile(profileData || null);
+            setLoading(false);
+          }
+        } else {
+          setUser(null);
           setProfile(null);
           setLoading(false);
         }
       }
     );
 
-    return () => subscription.unsubscribe();
+    return () => {
+      mounted = false;
+      subscription.unsubscribe();
+    };
   }, []);
-
-  async function fetchProfile(userId) {
-    try {
-      const { data, error } = await supabase
-        .from('profiles')
-        .select('*')
-        .eq('id', userId)
-        .single();
-      if (error) console.error('Profile fetch error:', error);
-      setProfile(data || null);
-    } catch (e) {
-      console.error('Profile fetch exception:', e);
-      setProfile(null);
-    }
-    setLoading(false);
-  }
 
   async function signUp(email, password, displayName) {
     const { data, error } = await supabase.auth.signUp({
