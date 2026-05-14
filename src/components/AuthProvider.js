@@ -21,11 +21,29 @@ export function AuthProvider({ children }) {
 
     async function init() {
       try {
-        const { data: { session }, error } = await supabase.auth.getSession();
+        const sessionPromise = supabase.auth.getSession();
+        const timeoutPromise = new Promise((_, reject) =>
+          setTimeout(() => reject(new Error('Session timeout')), 4000)
+        );
+
+        let session;
+        try {
+          const result = await Promise.race([sessionPromise, timeoutPromise]);
+          session = result.data?.session;
+        } catch (timeoutErr) {
+          console.warn('Auth session timed out, clearing state');
+          try { localStorage.clear(); } catch(e) {}
+          if (mounted) {
+            setUser(null);
+            setProfile(null);
+            setLoading(false);
+          }
+          return;
+        }
 
         if (!mounted) return;
 
-        if (error || !session?.user) {
+        if (!session?.user) {
           setUser(null);
           setProfile(null);
           setLoading(false);
