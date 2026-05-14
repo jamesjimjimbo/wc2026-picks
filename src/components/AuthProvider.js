@@ -13,58 +13,49 @@ export function AuthProvider({ children }) {
 
   useEffect(() => {
     if (!supabase) {
+      console.log('[AUTH] No supabase client');
       setLoading(false);
       return;
     }
 
     let mounted = true;
+    console.log('[AUTH] Starting init...');
 
     async function init() {
       try {
-        const sessionPromise = supabase.auth.getSession();
-        const timeoutPromise = new Promise((_, reject) =>
-          setTimeout(() => reject(new Error('Session timeout')), 4000)
-        );
-
-        let session;
-        try {
-          const result = await Promise.race([sessionPromise, timeoutPromise]);
-          session = result.data?.session;
-        } catch (timeoutErr) {
-          console.warn('Auth session timed out, clearing state');
-          try { localStorage.clear(); } catch(e) {}
-          if (mounted) {
-            setUser(null);
-            setProfile(null);
-            setLoading(false);
-          }
-          return;
-        }
+        console.log('[AUTH] Calling getSession...');
+        const { data, error } = await supabase.auth.getSession();
+        console.log('[AUTH] getSession returned:', { session: !!data?.session, error });
 
         if (!mounted) return;
 
-        if (!session?.user) {
+        if (error || !data?.session?.user) {
+          console.log('[AUTH] No valid session, showing login');
           setUser(null);
           setProfile(null);
           setLoading(false);
           return;
         }
 
-        setUser(session.user);
+        console.log('[AUTH] Session valid, user:', data.session.user.email);
+        setUser(data.session.user);
 
-        const { data: profileData } = await supabase
+        console.log('[AUTH] Fetching profile...');
+        const { data: profileData, error: profileErr } = await supabase
           .from('profiles')
           .select('*')
-          .eq('id', session.user.id)
+          .eq('id', data.session.user.id)
           .single();
+        console.log('[AUTH] Profile result:', { profileData, profileErr });
 
         if (!mounted) return;
 
         setProfile(profileData || null);
         setLoading(false);
+        console.log('[AUTH] Init complete');
 
       } catch (e) {
-        console.error('Auth init error:', e);
+        console.error('[AUTH] Init error:', e);
         if (mounted) {
           setUser(null);
           setProfile(null);
@@ -77,6 +68,7 @@ export function AuthProvider({ children }) {
 
     const { data: { subscription } } = supabase.auth.onAuthStateChange(
       async (event, session) => {
+        console.log('[AUTH] State change:', event, !!session);
         if (!mounted) return;
 
         if (session?.user) {
