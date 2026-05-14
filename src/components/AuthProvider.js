@@ -13,75 +13,37 @@ export function AuthProvider({ children }) {
 
   useEffect(() => {
     if (!supabase) {
-      console.log('[AUTH] No supabase client');
       setLoading(false);
       return;
     }
 
     let mounted = true;
-    console.log('[AUTH] Starting init...');
 
-    async function init() {
+    async function fetchProfile(userId) {
       try {
-        console.log('[AUTH] Calling getSession...');
-        const { data, error } = await supabase.auth.getSession();
-        console.log('[AUTH] getSession returned:', { session: !!data?.session, error });
-
-        if (!mounted) return;
-
-        if (error || !data?.session?.user) {
-          console.log('[AUTH] No valid session, showing login');
-          setUser(null);
-          setProfile(null);
-          setLoading(false);
-          return;
-        }
-
-        console.log('[AUTH] Session valid, user:', data.session.user.email);
-        setUser(data.session.user);
-
-        console.log('[AUTH] Fetching profile...');
-        const { data: profileData, error: profileErr } = await supabase
+        const { data } = await supabase
           .from('profiles')
           .select('*')
-          .eq('id', data.session.user.id)
+          .eq('id', userId)
           .single();
-        console.log('[AUTH] Profile result:', { profileData, profileErr });
-
-        if (!mounted) return;
-
-        setProfile(profileData || null);
-        setLoading(false);
-        console.log('[AUTH] Init complete');
-
+        if (mounted) setProfile(data || null);
       } catch (e) {
-        console.error('[AUTH] Init error:', e);
-        if (mounted) {
-          setUser(null);
-          setProfile(null);
-          setLoading(false);
-        }
+        console.error('Profile fetch error:', e);
+        if (mounted) setProfile(null);
       }
+      if (mounted) setLoading(false);
     }
 
-    init();
-
+    // Use onAuthStateChange as the ONLY auth detection method
+    // It fires immediately with INITIAL_SESSION event
     const { data: { subscription } } = supabase.auth.onAuthStateChange(
       async (event, session) => {
-        console.log('[AUTH] State change:', event, !!session);
+        console.log('[AUTH] Event:', event, !!session);
         if (!mounted) return;
 
         if (session?.user) {
           setUser(session.user);
-          const { data: profileData } = await supabase
-            .from('profiles')
-            .select('*')
-            .eq('id', session.user.id)
-            .single();
-          if (mounted) {
-            setProfile(profileData || null);
-            setLoading(false);
-          }
+          await fetchProfile(session.user.id);
         } else {
           setUser(null);
           setProfile(null);
@@ -90,8 +52,17 @@ export function AuthProvider({ children }) {
       }
     );
 
+    // Safety timeout in case onAuthStateChange never fires
+    const timeout = setTimeout(() => {
+      if (mounted && loading) {
+        console.warn('[AUTH] Timeout - forcing login screen');
+        setLoading(false);
+      }
+    }, 5000);
+
     return () => {
       mounted = false;
+      clearTimeout(timeout);
       subscription.unsubscribe();
     };
   }, []);
