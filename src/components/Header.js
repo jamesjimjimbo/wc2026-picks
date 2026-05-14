@@ -144,8 +144,8 @@ export default function Header({ picks, results, odds, view, setView, leagues, a
           {[
             { id: 'picks', label: 'My Picks', icon: '⚽' },
             { id: 'leaderboard', label: 'Standings', icon: '🏆' },
-            { id: 'results', label: 'Results', icon: '📊' },
-            { id: 'admin', label: 'Admin', icon: '⚙️' },
+           { id: 'results', label: 'Results', icon: '📊' },
+            ...(profile?.is_admin ? [{ id: 'admin', label: 'Admin', icon: '⚙️' }] : []),
           ].map(tab => (
             <button
               key={tab.id}
