@@ -12,6 +12,12 @@ export function createClient() {
     return null;
   }
   
-  client = createSupabaseClient(url, key);
+  client = createSupabaseClient(url, key, {
+    auth: {
+      lock: false,
+      storageKey: 'wc2026-auth',
+      flowType: 'implicit',
+    },
+  });
   return client;
 }
