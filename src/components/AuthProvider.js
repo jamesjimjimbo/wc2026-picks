@@ -28,17 +28,13 @@ export function AuthProvider({ children }) {
           .single();
         if (mounted) setProfile(data || null);
       } catch (e) {
-        console.error('Profile fetch error:', e);
         if (mounted) setProfile(null);
       }
       if (mounted) setLoading(false);
     }
 
-    // Use onAuthStateChange as the ONLY auth detection method
-    // It fires immediately with INITIAL_SESSION event
     const { data: { subscription } } = supabase.auth.onAuthStateChange(
       async (event, session) => {
-        console.log('[AUTH] Event:', event, !!session);
         if (!mounted) return;
 
         if (session?.user) {
@@ -52,12 +48,8 @@ export function AuthProvider({ children }) {
       }
     );
 
-    // Safety timeout in case onAuthStateChange never fires
     const timeout = setTimeout(() => {
-      if (mounted && loading) {
-        console.warn('[AUTH] Timeout - forcing login screen');
-        setLoading(false);
-      }
+      if (mounted && loading) setLoading(false);
     }, 5000);
 
     return () => {
@@ -80,27 +72,4 @@ export function AuthProvider({ children }) {
 
   async function signIn(email, password) {
     const { data, error } = await supabase.auth.signInWithPassword({
-      email,
-      password,
-    });
-    return { data, error };
-  }
-
-  async function signOut() {
-    await supabase.auth.signOut();
-    setUser(null);
-    setProfile(null);
-  }
-
-  return (
-    <AuthContext.Provider value={{
-      user, profile, loading,
-      signUp, signIn, signOut,
-      supabase,
-    }}>
-      {children}
-    </AuthContext.Provider>
-  );
-}
-
-export const useAuth = () => useContext(AuthContext);
+      e
