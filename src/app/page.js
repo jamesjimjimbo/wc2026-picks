@@ -40,25 +40,34 @@ function AppContent() {
     loadLeagueMembers(activeLeague.id);
   }, [user, supabase, activeLeague]);
 
-  async function loadLeagues() {
+ async function loadLeagues() {
     if (!supabase) return;
 
     try {
-      // Get leagues the user belongs to
-      const { data: memberships, error } = await supabase
+      // Step 1: get league IDs the user belongs to
+      const { data: memberships, error: memErr } = await supabase
         .from('league_members')
-        .select('league_id, leagues(id, name, invite_code, created_by)')
+        .select('league_id')
         .eq('user_id', user.id);
 
-      if (error) console.error('League load error:', error);
+      if (memErr) console.error('Membership load error:', memErr);
 
       if (memberships && memberships.length > 0) {
-        const userLeagues = memberships
-          .map(m => m.leagues)
-          .filter(Boolean)
-          .sort((a, b) => a.name.localeCompare(b.name));
-        setLeagues(userLeagues);
-        setActiveLeague(userLeagues[0]);
+        const leagueIds = memberships.map(m => m.league_id);
+
+        // Step 2: fetch those leagues separately (avoids RLS join issues)
+        const { data: leaguesData, error: leagueErr } = await supabase
+          .from('leagues')
+          .select('id, name, invite_code, created_by')
+          .in('id', leagueIds);
+
+        if (leagueErr) console.error('Leagues load error:', leagueErr);
+
+        if (leaguesData && leaguesData.length > 0) {
+          const sorted = leaguesData.sort((a, b) => a.name.localeCompare(b.name));
+          setLeagues(sorted);
+          setActiveLeague(sorted[0]);
+        }
       }
     } catch (e) {
       console.error('League load exception:', e);
