@@ -123,6 +123,7 @@ src/
 supabase-schema.sql      # Database schema — run in Supabase SQL Editor
 ```
 
+
 ## Tech Stack
 
 - **Next.js 14** (React, deployed on Vercel)
