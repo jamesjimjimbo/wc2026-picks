@@ -2,6 +2,7 @@
 
 A web app for friends to predict FIFA World Cup 2026 match winners and compete for points. Supports multiple leagues — send different invite codes to different friend groups, everyone uses the same site.
 
+
 ## How It Works
 
 - **72 group stage matches** across 12 groups. Everyone wagers 1pt per match automatically.
