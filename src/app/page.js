@@ -10,6 +10,7 @@ import PicksView from '@/components/PicksView';
 import LeaderboardView from '@/components/LeaderboardView';
 import ResultsView from '@/components/ResultsView';
 import AdminView from '@/components/AdminView';
+import RulesView from '@/components/RulesView';
 
 function AppContent() {
   const { user, profile, loading, supabase } = useAuth();
@@ -26,6 +27,7 @@ function AppContent() {
   const [results, setResults] = useState({});
   const [odds, setOdds] = useState({});
   const [leaderboard, setLeaderboard] = useState([]);
+  const [knockoutMatches, setKnockoutMatches] = useState([]);
   const [dataLoaded, setDataLoaded] = useState(false);
 
   // Load leagues when user is ready
@@ -79,7 +81,7 @@ function AppContent() {
     if (!supabase) return;
     try {
       const { data } = await withTimeout(
-        supabase.from('league_members').select('user_id, profiles(display_name)').eq('league_id', leagueId),
+        supabase.from('league_members').select('user_id').eq('league_id', leagueId),
         5000,
         'load league members'
       );
@@ -94,7 +96,7 @@ function AppContent() {
 
     try {
       // Run all data loads in parallel with individual timeouts
-      const [picksResult, resultsResult, oddsResult, lbResult] = await Promise.allSettled([
+      const [picksResult, resultsResult, oddsResult, lbResult, koResult] = await Promise.allSettled([
         withTimeout(
           supabase.from('picks').select('*').eq('user_id', user.id),
           5000, 'load picks'
@@ -110,6 +112,10 @@ function AppContent() {
         withTimeout(
           supabase.from('leaderboard').select('*'),
           5000, 'load leaderboard'
+        ),
+        withTimeout(
+          supabase.from('knockout_matches').select('*'),
+          5000, 'load knockout matches'
         ),
       ]);
 
@@ -140,6 +146,11 @@ function AppContent() {
       if (lbResult.status === 'fulfilled' && lbResult.value.data) {
         setLeaderboard(lbResult.value.data);
       }
+
+      // Process knockout matches
+      if (koResult.status === 'fulfilled' && koResult.value.data) {
+        setKnockoutMatches(koResult.value.data);
+      }
     } catch (e) {
       console.error('Game data load failed:', e.message);
     }
@@ -169,11 +180,12 @@ function AppContent() {
 
   function handleSwitchLeague(league) {
     setActiveLeague(league);
+    setLeagueMembers([]); // Clear immediately so stale data doesn't show
     loadLeagueMembers(league.id);
     setView('leaderboard');
   }
 
-  const handlePick = useCallback(async (matchId, choice) => {
+  const handlePick = useCallback(async (matchId, choice, isKnockout = false) => {
     if (!user || !supabase) return;
 
     const existing = picks[matchId];
@@ -188,18 +200,41 @@ function AppContent() {
       return;
     }
 
+    const wager = isKnockout ? (existing?.wager || 1) : 1;
+
     const { error } = await supabase.from('picks').upsert({
       user_id: user.id,
       match_id: matchId,
       pick: choice,
-      wager: 1,
-      is_knockout: false,
+      wager,
+      is_knockout: isKnockout,
     }, { onConflict: 'user_id,match_id' });
 
     if (!error) {
       setPicks(prev => ({
         ...prev,
-        [matchId]: { pick: choice, wager: 1, is_knockout: false },
+        [matchId]: { pick: choice, wager, is_knockout: isKnockout },
+      }));
+    }
+  }, [user, supabase, picks]);
+
+  const handleWagerChange = useCallback(async (matchId, newWager) => {
+    if (!user || !supabase) return;
+    const existing = picks[matchId];
+    if (!existing) return;
+
+    const { error } = await supabase.from('picks').upsert({
+      user_id: user.id,
+      match_id: matchId,
+      pick: existing.pick,
+      wager: newWager,
+      is_knockout: true,
+    }, { onConflict: 'user_id,match_id' });
+
+    if (!error) {
+      setPicks(prev => ({
+        ...prev,
+        [matchId]: { ...prev[matchId], wager: newWager },
       }));
     }
   }, [user, supabase, picks]);
@@ -306,6 +341,21 @@ function AppContent() {
           odds={odds}
           results={results}
           onPick={handlePick}
+          knockoutMatches={knockoutMatches}
+          balance={Object.entries(picks).reduce((total, [matchId, pick]) => {
+            const result = results[matchId];
+            if (!result) return total;
+            const matchOdds = odds[matchId];
+            if (!matchOdds) return total;
+            if (pick.pick === result.result) {
+              const oddsValue = pick.pick === 'home' ? matchOdds.home_odds
+                : pick.pick === 'draw' ? matchOdds.draw_odds
+                : matchOdds.away_odds;
+              return total + (pick.wager || 1) * (oddsValue || 1);
+            }
+            return total;
+          }, 0)}
+          onWagerChange={handleWagerChange}
         />
       )}
 
@@ -335,6 +385,10 @@ function AppContent() {
           onSaveResult={handleSaveResult}
           onSaveOdds={handleSaveOdds}
         />
+      )}
+
+      {view === 'rules' && (
+        <RulesView onClose={() => setView('picks')} />
       )}
     </div>
   );
