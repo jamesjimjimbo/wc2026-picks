@@ -3,7 +3,7 @@
 import { useState } from 'react';
 import { FLAGS, SHORT_NAMES, formatKickoff, hasMatchStarted } from '@/data/matches';
 
-export default function MatchCard({ match, pick, odds, result, onPick }) {
+export default function MatchCard({ match, pick, odds, result, onPick, isKnockout, balance, onWagerChange }) {
   const [animating, setAnimating] = useState(false);
   const isLocked = hasMatchStarted(match.kickoff) || !!result;
   const correct = result && pick?.pick === result.result;
@@ -13,19 +13,25 @@ export default function MatchCard({ match, pick, odds, result, onPick }) {
     if (isLocked) return;
     setAnimating(true);
     setTimeout(() => setAnimating(false), 250);
-    onPick(match.id, choice);
+    onPick(match.id, choice, isKnockout);
   }
 
   const homeOdds = odds?.home_odds;
   const drawOdds = odds?.draw_odds;
   const awayOdds = odds?.away_odds;
 
-  // Calculate payout if correct
+  const wager = pick?.wager || 1;
   const payout = correct ? (
     pick.pick === 'home' ? homeOdds :
     pick.pick === 'draw' ? drawOdds :
     awayOdds
   ) : 0;
+
+  // For knockout: calculate potential payout based on current pick and wager
+  const selectedOdds = pick?.pick === 'home' ? homeOdds :
+    pick?.pick === 'draw' ? drawOdds :
+    pick?.pick === 'away' ? awayOdds : null;
+  const potentialPayout = selectedOdds ? (wager * selectedOdds) : 0;
 
   return (
     <div className={`bg-white rounded-xl border transition-all ${
@@ -38,7 +44,7 @@ export default function MatchCard({ match, pick, odds, result, onPick }) {
         <div className={`text-center py-1 text-[10px] font-bold tracking-wider rounded-t-xl ${
           correct ? 'bg-brand-green-light text-brand-green-dark' : 'bg-red-50 text-red-500'
         }`}>
-          {correct ? `✓ +${(payout * (pick.wager || 1)).toFixed(1)} PTS` : '✗ 0 PTS'}
+          {correct ? `✓ +${(payout * wager).toFixed(1)} PTS` : `✗ -${wager.toFixed(1)} PTS`}
         </div>
       )}
 
@@ -46,7 +52,7 @@ export default function MatchCard({ match, pick, odds, result, onPick }) {
         {/* Meta line */}
         <div className="text-center mb-2">
           <span className="text-[10px] text-text-muted">
-            {formatKickoff(match.kickoff)} · {match.venueShort}
+            {match.venueShort && match.venueShort !== 'TBD' ? `${formatKickoff(match.kickoff)} · ${match.venueShort}` : 'Date TBD'}
           </span>
           {isLocked && !result && (
             <span className="inline-block ml-2 text-[9px] bg-surface-tertiary text-text-muted px-1.5 py-0.5 rounded">
@@ -69,9 +75,9 @@ export default function MatchCard({ match, pick, odds, result, onPick }) {
           >
             <span className="text-2xl">{FLAGS[match.home] || '🏳️'}</span>
             <span className="text-[11px] font-bold text-text-primary tracking-wide">
-              {SHORT_NAMES[match.home]}
+              {SHORT_NAMES[match.home] || match.home}
             </span>
-            {homeOdds && (
+            {homeOdds > 0 && (
               <span className="text-[10px] text-text-muted font-mono">{homeOdds.toFixed(2)}</span>
             )}
           </button>
@@ -87,7 +93,7 @@ export default function MatchCard({ match, pick, odds, result, onPick }) {
             } ${isLocked ? 'opacity-60 cursor-default' : 'cursor-pointer'}`}
           >
             <span className="block text-[10px] font-bold text-text-muted tracking-wider">DRAW</span>
-            {drawOdds && (
+            {drawOdds > 0 && (
               <span className="block text-[10px] text-text-muted font-mono mt-0.5">{drawOdds.toFixed(2)}</span>
             )}
           </button>
@@ -104,12 +110,51 @@ export default function MatchCard({ match, pick, odds, result, onPick }) {
           >
             <span className="text-2xl">{FLAGS[match.away] || '🏳️'}</span>
             <span className="text-[11px] font-bold text-text-primary tracking-wide">
-              {SHORT_NAMES[match.away]}
+              {SHORT_NAMES[match.away] || match.away}
             </span>
-            {awayOdds && (
+            {awayOdds > 0 && (
               <span className="text-[10px] text-text-muted font-mono">{awayOdds.toFixed(2)}</span>
             )}
           </button>
+        </div>
+
+        {/* Wager section */}
+        <div className={`mt-2 pt-2 border-t border-border/50 flex items-center justify-between ${
+          !pick ? 'opacity-40' : ''
+        }`}>
+          <div className="flex items-center gap-2">
+            <span className="text-[9px] text-text-muted uppercase tracking-wider font-medium">Wager</span>
+            {isKnockout && !isLocked && pick ? (
+              <div className="flex items-center gap-1">
+                <button
+                  onClick={() => onWagerChange && onWagerChange(match.id, Math.max(1, wager - 1))}
+                  className="w-5 h-5 flex items-center justify-center bg-surface-tertiary rounded text-[10px] font-bold text-text-muted hover:bg-surface-secondary"
+                >
+                  −
+                </button>
+                <span className="text-sm font-bold font-mono text-text-primary w-8 text-center">
+                  {wager.toFixed(0)}
+                </span>
+                <button
+                  onClick={() => onWagerChange && onWagerChange(match.id, Math.min(balance || 100, wager + 1))}
+                  className="w-5 h-5 flex items-center justify-center bg-surface-tertiary rounded text-[10px] font-bold text-text-muted hover:bg-surface-secondary"
+                >
+                  +
+                </button>
+                <span className="text-[9px] text-text-muted">pt{wager !== 1 ? 's' : ''}</span>
+              </div>
+            ) : (
+              <span className="text-xs font-bold font-mono text-text-muted">
+                {wager.toFixed(0)} pt{wager !== 1 ? 's' : ''}
+                {!isKnockout && <span className="text-[8px] ml-1 text-text-muted/50">FIXED</span>}
+              </span>
+            )}
+          </div>
+          {pick && selectedOdds && !result && (
+            <span className="text-[10px] text-text-muted">
+              Potential: <span className="font-mono font-semibold text-brand-green">{potentialPayout.toFixed(1)}</span> pts
+            </span>
+          )}
         </div>
       </div>
     </div>
