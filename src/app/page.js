@@ -315,6 +315,8 @@ function AppContent() {
           currentUserId={user.id}
           leagueMembers={leagueMembers}
           activeLeague={activeLeague}
+          results={results}
+          odds={odds}
         />
       )}
 
