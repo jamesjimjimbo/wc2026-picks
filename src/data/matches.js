@@ -146,14 +146,63 @@ export const GROUP_MATCHES = [
   { id: "L6", group: "L", date: "2026-06-27", kickoff: "2026-06-27T21:00:00Z", home: "Croatia", away: "Ghana", venue: "Philadelphia", venueShort: "Lincoln Financial" },
 ];
 
-// Knockout round structure — matches get populated as groups finish
+// Knockout round structure with pre-set match slots
+// Teams are TBD until groups finish — descriptions show where teams come from
 export const KNOCKOUT_ROUNDS = [
-  { id: "R32", name: "Round of 32", matchCount: 16 },
-  { id: "R16", name: "Round of 16", matchCount: 8 },
-  { id: "QF", name: "Quarter-finals", matchCount: 4 },
-  { id: "SF", name: "Semi-finals", matchCount: 2 },
-  { id: "3P", name: "Third place", matchCount: 1 },
-  { id: "F", name: "Final", matchCount: 1 },
+  { id: "R32", name: "Round of 32", shortName: "R32" },
+  { id: "R16", name: "Round of 16", shortName: "R16" },
+  { id: "QF", name: "Quarter-finals", shortName: "QF" },
+  { id: "SF", name: "Semi-finals", shortName: "SF" },
+  { id: "3P", name: "Third place", shortName: "3rd" },
+  { id: "F", name: "Final", shortName: "Final" },
+];
+
+// Knockout match slots — home/away are TBD placeholders until admin populates them
+// source_home/source_away describe where the team comes from
+export const KNOCKOUT_MATCH_SLOTS = [
+  // Round of 32 (16 matches)
+  { id: "R32-1", round: "R32", source_home: "1st Group A", source_away: "3rd Group C/D/E", matchNum: 1 },
+  { id: "R32-2", round: "R32", source_home: "1st Group B", source_away: "3rd Group A/D/E", matchNum: 2 },
+  { id: "R32-3", round: "R32", source_home: "1st Group C", source_away: "3rd Group A/B/F", matchNum: 3 },
+  { id: "R32-4", round: "R32", source_home: "1st Group D", source_away: "3rd Group B/E/F", matchNum: 4 },
+  { id: "R32-5", round: "R32", source_home: "1st Group E", source_away: "3rd Group A/B/C", matchNum: 5 },
+  { id: "R32-6", round: "R32", source_home: "1st Group F", source_away: "3rd Group C/D/E", matchNum: 6 },
+  { id: "R32-7", round: "R32", source_home: "2nd Group A", source_away: "2nd Group C", matchNum: 7 },
+  { id: "R32-8", round: "R32", source_home: "2nd Group B", source_away: "2nd Group D", matchNum: 8 },
+  { id: "R32-9", round: "R32", source_home: "1st Group G", source_away: "3rd Group I/J/K", matchNum: 9 },
+  { id: "R32-10", round: "R32", source_home: "1st Group H", source_away: "3rd Group G/J/K", matchNum: 10 },
+  { id: "R32-11", round: "R32", source_home: "1st Group I", source_away: "3rd Group G/H/L", matchNum: 11 },
+  { id: "R32-12", round: "R32", source_home: "1st Group J", source_away: "3rd Group H/K/L", matchNum: 12 },
+  { id: "R32-13", round: "R32", source_home: "1st Group K", source_away: "3rd Group G/H/I", matchNum: 13 },
+  { id: "R32-14", round: "R32", source_home: "1st Group L", source_away: "3rd Group I/J/K", matchNum: 14 },
+  { id: "R32-15", round: "R32", source_home: "2nd Group E", source_away: "2nd Group G", matchNum: 15 },
+  { id: "R32-16", round: "R32", source_home: "2nd Group F", source_away: "2nd Group H", matchNum: 16 },
+
+  // Round of 16 (8 matches)
+  { id: "R16-1", round: "R16", source_home: "Winner R32-1", source_away: "Winner R32-2", matchNum: 1 },
+  { id: "R16-2", round: "R16", source_home: "Winner R32-3", source_away: "Winner R32-4", matchNum: 2 },
+  { id: "R16-3", round: "R16", source_home: "Winner R32-5", source_away: "Winner R32-6", matchNum: 3 },
+  { id: "R16-4", round: "R16", source_home: "Winner R32-7", source_away: "Winner R32-8", matchNum: 4 },
+  { id: "R16-5", round: "R16", source_home: "Winner R32-9", source_away: "Winner R32-10", matchNum: 5 },
+  { id: "R16-6", round: "R16", source_home: "Winner R32-11", source_away: "Winner R32-12", matchNum: 6 },
+  { id: "R16-7", round: "R16", source_home: "Winner R32-13", source_away: "Winner R32-14", matchNum: 7 },
+  { id: "R16-8", round: "R16", source_home: "Winner R32-15", source_away: "Winner R32-16", matchNum: 8 },
+
+  // Quarter-finals (4 matches)
+  { id: "QF-1", round: "QF", source_home: "Winner R16-1", source_away: "Winner R16-2", matchNum: 1 },
+  { id: "QF-2", round: "QF", source_home: "Winner R16-3", source_away: "Winner R16-4", matchNum: 2 },
+  { id: "QF-3", round: "QF", source_home: "Winner R16-5", source_away: "Winner R16-6", matchNum: 3 },
+  { id: "QF-4", round: "QF", source_home: "Winner R16-7", source_away: "Winner R16-8", matchNum: 4 },
+
+  // Semi-finals (2 matches)
+  { id: "SF-1", round: "SF", source_home: "Winner QF-1", source_away: "Winner QF-2", matchNum: 1 },
+  { id: "SF-2", round: "SF", source_home: "Winner QF-3", source_away: "Winner QF-4", matchNum: 2 },
+
+  // Third place
+  { id: "3P-1", round: "3P", source_home: "Loser SF-1", source_away: "Loser SF-2", matchNum: 1 },
+
+  // Final
+  { id: "F-1", round: "F", source_home: "Winner SF-1", source_away: "Winner SF-2", matchNum: 1 },
 ];
 
 // Helper: get all matches for a group
