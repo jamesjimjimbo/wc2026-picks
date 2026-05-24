@@ -11,6 +11,11 @@ export default function LeaderboardView({ leaderboard, currentUserId, leagueMemb
   const [userPicks, setUserPicks] = useState({}); // { userId: { matchId: pick } }
   const [loadingPicks, setLoadingPicks] = useState(false);
 
+  // Check if any knockout match has a result
+  const hasKnockoutsStarted = useMemo(() => {
+    return Object.keys(results || {}).some(id => id.startsWith('R32') || id.startsWith('R16') || id.startsWith('QF') || id.startsWith('SF') || id.startsWith('3P') || id.startsWith('F-'));
+  }, [results]);
+
   // Filter leaderboard to only show members of the active league
   const filtered = useMemo(() => {
     if (!leagueMembers || leagueMembers.length === 0) return [];
@@ -55,12 +60,12 @@ export default function LeaderboardView({ leaderboard, currentUserId, leagueMemb
     }
   }
 
-  // Get matches that have kicked off (picks are visible) and have a result
-  const kickedOffMatches = useMemo(() => {
-    return GROUP_MATCHES.filter(m => hasMatchStarted(m.kickoff)).sort(
+  // Get matches where picks should be visible (kicked off OR has a result)
+  const visibleMatches = useMemo(() => {
+    return GROUP_MATCHES.filter(m => hasMatchStarted(m.kickoff) || results?.[m.id]).sort(
       (a, b) => new Date(b.kickoff) - new Date(a.kickoff)
     );
-  }, []);
+  }, [results]);
 
   function renderUserPicks(userId) {
     const picks = userPicks[userId];
@@ -211,12 +216,18 @@ export default function LeaderboardView({ leaderboard, currentUserId, leagueMemb
 
                   {/* Points */}
                   <div className="text-right">
-                    <p className={`text-xl font-bold font-mono ${
-                      user.points > 0 ? 'text-brand-green' : 'text-text-muted'
-                    }`}>
-                      {user.points.toFixed(1)}
-                    </p>
-                    <p className="text-[9px] text-text-muted uppercase tracking-wider">pts</p>
+                    {user.points === 0 && user.decided_matches > 0 && hasKnockoutsStarted ? (
+                      <p className="text-xs font-bold text-red-400">ELIMINATED</p>
+                    ) : (
+                      <>
+                        <p className={`text-xl font-bold font-mono ${
+                          user.points > 0 ? 'text-brand-green' : 'text-text-muted'
+                        }`}>
+                          {user.points.toFixed(1)}
+                        </p>
+                        <p className="text-[9px] text-text-muted uppercase tracking-wider">pts</p>
+                      </>
+                    )}
                   </div>
 
                   {/* Expand indicator */}
@@ -236,6 +247,85 @@ export default function LeaderboardView({ leaderboard, currentUserId, leagueMemb
           })}
         </div>
       )}
+
+      {/* Join another league */}
+      <JoinAnotherLeague />
+    </div>
+  );
+}
+
+function JoinAnotherLeague() {
+  const { supabase } = useAuth();
+  const [showForm, setShowForm] = useState(false);
+  const [code, setCode] = useState('');
+  const [status, setStatus] = useState(null);
+  const [loading, setLoading] = useState(false);
+
+  async function handleJoin(e) {
+    e.preventDefault();
+    if (!code.trim() || !supabase) return;
+    setStatus(null);
+    setLoading(true);
+
+    const { data, error } = await supabase.rpc('join_league_by_code', {
+      code: code.trim().toUpperCase(),
+    });
+
+    if (error) {
+      setStatus({ error: error.message.includes('Invalid') ? 'Invalid invite code' : error.message });
+    } else {
+      setStatus({ success: `Joined ${data.league_name}! Refresh to see it.` });
+      setCode('');
+    }
+    setLoading(false);
+  }
+
+  if (!showForm) {
+    return (
+      <div className="text-center pt-6 pb-4">
+        <button
+          onClick={() => setShowForm(true)}
+          className="text-[11px] text-text-muted hover:text-brand-green transition-colors"
+        >
+          + Join another league
+        </button>
+      </div>
+    );
+  }
+
+  return (
+    <div className="mt-6 bg-surface-secondary rounded-xl p-4">
+      <p className="text-xs font-bold text-text-primary mb-2">Join Another League</p>
+      <form onSubmit={handleJoin} className="flex gap-2">
+        <input
+          type="text"
+          value={code}
+          onChange={e => setCode(e.target.value.toUpperCase())}
+          placeholder="INVITE CODE"
+          maxLength={20}
+          className="flex-1 px-3 py-2 bg-white border border-border rounded-lg text-sm font-mono uppercase tracking-wider text-center focus:outline-none focus:ring-2 focus:ring-brand-green/30"
+          autoFocus
+        />
+        <button
+          type="submit"
+          disabled={loading || !code.trim()}
+          className="px-4 py-2 bg-brand-green text-white text-sm font-semibold rounded-lg hover:bg-brand-green-dark transition-colors disabled:opacity-50"
+        >
+          {loading ? '...' : 'Join'}
+        </button>
+      </form>
+      {status?.error && (
+        <p className="text-[11px] text-red-500 mt-2">{status.error}</p>
+      )}
+      {status?.success && (
+        <p className="text-[11px] text-brand-green mt-2">{status.success}</p>
+      )}
+      <button
+        onClick={() => { setShowForm(false); setStatus(null); }}
+        className="text-[10px] text-text-muted mt-2 hover:text-text-secondary"
+      >
+        Cancel
+      </button>
     </div>
   );
 }
