@@ -1,7 +1,7 @@
 'use client';
 
 import { useState } from 'react';
-import { FLAGS, SHORT_NAMES, formatKickoff, hasMatchStarted } from '@/data/matches';
+import { FLAGS, SHORT_NAMES, formatKickoff, formatMatchDate, hasMatchStarted } from '@/data/matches';
 
 export default function MatchCard({ match, pick, odds, result, onPick, isKnockout, balance, onWagerChange }) {
   const [animating, setAnimating] = useState(false);
@@ -52,7 +52,7 @@ export default function MatchCard({ match, pick, odds, result, onPick, isKnockou
         {/* Meta line */}
         <div className="text-center mb-2">
           <span className="text-[10px] text-text-muted">
-            {match.venueShort && match.venueShort !== 'TBD' ? `${formatKickoff(match.kickoff)} · ${match.venueShort}` : 'Date TBD'}
+            {match.venueShort && match.venueShort !== 'TBD' ? `${formatMatchDate(match.date)} · ${formatKickoff(match.kickoff)} · ${match.venueShort}` : 'Date TBD'}
           </span>
           {isLocked && !result && (
             <span className="inline-block ml-2 text-[9px] bg-surface-tertiary text-text-muted px-1.5 py-0.5 rounded">
