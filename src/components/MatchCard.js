@@ -128,14 +128,7 @@ export default function MatchCard({ match, pick, odds, result, onPick, isKnockou
             {isKnockout && !isLocked && pick ? (
               (() => {
                 // Max wager = available balance + this match's current wager (since it's already committed)
-                const maxWager = Math.floor((balance || 0) + wager);
-                const eliminated = maxWager === 0;
-                
-                if (eliminated) {
-                  return (
-                    <span className="text-[10px] text-red-400 font-semibold">ELIMINATED</span>
-                  );
-                }
+                const maxWager = Math.round(((balance || 0) + wager) * 10) / 10;
 
                 return (
                   <div className="flex items-center gap-1.5">
@@ -148,8 +141,8 @@ export default function MatchCard({ match, pick, odds, result, onPick, isKnockou
                         setWagerInput(e.target.value);
                       }}
                       onBlur={(e) => {
-                        const val = parseInt(e.target.value);
-                        const clamped = isNaN(val) ? 0 : Math.max(0, Math.min(maxWager, val));
+                        const val = parseFloat(e.target.value);
+                        const clamped = isNaN(val) ? 0 : Math.max(0, Math.min(maxWager, Math.round(val * 10) / 10));
                         setWagerInput(null);
                         if (onWagerChange) onWagerChange(match.id, clamped);
                       }}
@@ -161,7 +154,7 @@ export default function MatchCard({ match, pick, odds, result, onPick, isKnockou
                       className="w-14 text-center text-sm font-bold font-mono text-text-primary bg-surface-secondary border border-border rounded-lg py-1 focus:outline-none focus:ring-2 focus:ring-brand-green/30 focus:border-brand-green"
                     />
                     <span className="text-[9px] text-text-muted">
-                      / {maxWager} avail
+                      / {maxWager.toFixed(1)} avail
                     </span>
                   </div>
                 );
