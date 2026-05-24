@@ -201,7 +201,7 @@ function AppContent() {
       return;
     }
 
-    const wager = isKnockout ? (existing?.wager || 1) : 1;
+    const wager = isKnockout ? (existing?.wager ?? 1) : 1;
 
     const { error } = await supabase.from('picks').upsert({
       user_id: user.id,
