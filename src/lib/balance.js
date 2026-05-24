@@ -11,7 +11,7 @@ export function calculateTotalEarned(picks, results, odds) {
       const oddsValue = pick.pick === 'home' ? matchOdds.home_odds
         : pick.pick === 'draw' ? matchOdds.draw_odds
         : matchOdds.away_odds;
-      return total + (pick.wager || 1) * (oddsValue || 1);
+      return total + (pick.wager ?? 1) * (oddsValue || 1);
     }
     return total;
   }, 0);
@@ -24,7 +24,7 @@ export function calculateKnockoutLosses(picks, results) {
     const result = results[matchId];
     if (!result) return total;
     if (pick.pick !== result.result) {
-      return total + (pick.wager || 1);
+      return total + (pick.wager ?? 1);
     }
     return total;
   }, 0);
@@ -35,7 +35,7 @@ export function calculatePendingWagers(picks, results) {
   return Object.entries(picks).reduce((total, [matchId, pick]) => {
     if (!pick.is_knockout) return total;
     if (results[matchId]) return total; // already resolved
-    return total + (pick.wager || 1);
+    return total + (pick.wager ?? 1);
   }, 0);
 }
 
