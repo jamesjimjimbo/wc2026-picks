@@ -11,6 +11,7 @@ import LeaderboardView from '@/components/LeaderboardView';
 import ResultsView from '@/components/ResultsView';
 import AdminView from '@/components/AdminView';
 import RulesView from '@/components/RulesView';
+import { calculateAvailableBalance } from '@/lib/balance';
 
 function AppContent() {
   const { user, profile, loading, supabase } = useAuth();
@@ -292,6 +293,9 @@ function AppContent() {
     );
   }
 
+  // Calculate available balance for knockout wagers
+  const availableBalance = calculateAvailableBalance(picks, results, odds);
+
   if (!user) {
     return <AuthForm />;
   }
@@ -342,19 +346,7 @@ function AppContent() {
           results={results}
           onPick={handlePick}
           knockoutMatches={knockoutMatches}
-          balance={Object.entries(picks).reduce((total, [matchId, pick]) => {
-            const result = results[matchId];
-            if (!result) return total;
-            const matchOdds = odds[matchId];
-            if (!matchOdds) return total;
-            if (pick.pick === result.result) {
-              const oddsValue = pick.pick === 'home' ? matchOdds.home_odds
-                : pick.pick === 'draw' ? matchOdds.draw_odds
-                : matchOdds.away_odds;
-              return total + (pick.wager || 1) * (oddsValue || 1);
-            }
-            return total;
-          }, 0)}
+          balance={availableBalance}
           onWagerChange={handleWagerChange}
         />
       )}
