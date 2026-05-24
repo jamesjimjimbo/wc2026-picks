@@ -125,24 +125,43 @@ export default function MatchCard({ match, pick, odds, result, onPick, isKnockou
           <div className="flex items-center gap-2">
             <span className="text-[9px] text-text-muted uppercase tracking-wider font-medium">Wager</span>
             {isKnockout && !isLocked && pick ? (
-              <div className="flex items-center gap-1">
-                <button
-                  onClick={() => onWagerChange && onWagerChange(match.id, Math.max(1, wager - 1))}
-                  className="w-5 h-5 flex items-center justify-center bg-surface-tertiary rounded text-[10px] font-bold text-text-muted hover:bg-surface-secondary"
-                >
-                  −
-                </button>
-                <span className="text-sm font-bold font-mono text-text-primary w-8 text-center">
-                  {wager.toFixed(0)}
-                </span>
-                <button
-                  onClick={() => onWagerChange && onWagerChange(match.id, Math.min(balance || 100, wager + 1))}
-                  className="w-5 h-5 flex items-center justify-center bg-surface-tertiary rounded text-[10px] font-bold text-text-muted hover:bg-surface-secondary"
-                >
-                  +
-                </button>
-                <span className="text-[9px] text-text-muted">pt{wager !== 1 ? 's' : ''}</span>
-              </div>
+              (() => {
+                // Max wager = available balance + this match's current wager (since it's already committed)
+                const maxWager = Math.floor((balance || 0) + wager);
+                const canIncrease = wager < maxWager;
+                const eliminated = maxWager === 0;
+                
+                if (eliminated) {
+                  return (
+                    <span className="text-[10px] text-red-400 font-semibold">ELIMINATED</span>
+                  );
+                }
+
+                return (
+                  <div className="flex items-center gap-1">
+                    <button
+                      onClick={() => onWagerChange && onWagerChange(match.id, Math.max(1, wager - 1))}
+                      disabled={wager <= 1}
+                      className="w-5 h-5 flex items-center justify-center bg-surface-tertiary rounded text-[10px] font-bold text-text-muted hover:bg-surface-secondary disabled:opacity-30"
+                    >
+                      −
+                    </button>
+                    <span className="text-sm font-bold font-mono text-text-primary w-8 text-center">
+                      {wager.toFixed(0)}
+                    </span>
+                    <button
+                      onClick={() => onWagerChange && onWagerChange(match.id, Math.min(maxWager, wager + 1))}
+                      disabled={!canIncrease}
+                      className="w-5 h-5 flex items-center justify-center bg-surface-tertiary rounded text-[10px] font-bold text-text-muted hover:bg-surface-secondary disabled:opacity-30"
+                    >
+                      +
+                    </button>
+                    <span className="text-[9px] text-text-muted">
+                      pt{wager !== 1 ? 's' : ''} / {maxWager} avail
+                    </span>
+                  </div>
+                );
+              })()
             ) : (
               <span className="text-xs font-bold font-mono text-text-muted">
                 {wager.toFixed(0)} pt{wager !== 1 ? 's' : ''}
