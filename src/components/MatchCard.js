@@ -140,7 +140,7 @@ export default function MatchCard({ match, pick, odds, result, onPick, isKnockou
                   <div className="flex items-center gap-1.5">
                     <input
                       type="number"
-                      min={1}
+                      min={0}
                       max={maxWager}
                       value={wager}
                       onChange={(e) => {
@@ -149,9 +149,8 @@ export default function MatchCard({ match, pick, odds, result, onPick, isKnockou
                         if (onWagerChange) onWagerChange(match.id, clamped);
                       }}
                       onBlur={(e) => {
-                        // Enforce minimum of 1 on blur
-                        const val = parseInt(e.target.value) || 1;
-                        const clamped = Math.max(1, Math.min(maxWager, val));
+                        const val = parseInt(e.target.value) || 0;
+                        const clamped = Math.max(0, Math.min(maxWager, val));
                         if (onWagerChange) onWagerChange(match.id, clamped);
                       }}
                       className="w-14 text-center text-sm font-bold font-mono text-text-primary bg-surface-secondary border border-border rounded-lg py-1 focus:outline-none focus:ring-2 focus:ring-brand-green/30 focus:border-brand-green"
