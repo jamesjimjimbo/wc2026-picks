@@ -5,6 +5,7 @@ import { FLAGS, SHORT_NAMES, formatKickoff, formatMatchDate, hasMatchStarted } f
 
 export default function MatchCard({ match, pick, odds, result, onPick, isKnockout, balance, onWagerChange }) {
   const [animating, setAnimating] = useState(false);
+  const [wagerInput, setWagerInput] = useState(null); // null = use pick.wager, string while editing
   const isLocked = hasMatchStarted(match.kickoff) || !!result;
   const correct = result && pick?.pick === result.result;
   const wrong = result && pick && pick.pick !== result.result;
@@ -142,16 +143,20 @@ export default function MatchCard({ match, pick, odds, result, onPick, isKnockou
                       type="number"
                       min={0}
                       max={maxWager}
-                      value={wager}
+                      value={wagerInput !== null ? wagerInput : wager}
                       onChange={(e) => {
-                        const val = parseInt(e.target.value) || 0;
-                        const clamped = Math.max(0, Math.min(maxWager, val));
-                        if (onWagerChange) onWagerChange(match.id, clamped);
+                        setWagerInput(e.target.value);
                       }}
                       onBlur={(e) => {
-                        const val = parseInt(e.target.value) || 0;
-                        const clamped = Math.max(0, Math.min(maxWager, val));
+                        const val = parseInt(e.target.value);
+                        const clamped = isNaN(val) ? 0 : Math.max(0, Math.min(maxWager, val));
+                        setWagerInput(null);
                         if (onWagerChange) onWagerChange(match.id, clamped);
+                      }}
+                      onKeyDown={(e) => {
+                        if (e.key === 'Enter') {
+                          e.target.blur();
+                        }
                       }}
                       className="w-14 text-center text-sm font-bold font-mono text-text-primary bg-surface-secondary border border-border rounded-lg py-1 focus:outline-none focus:ring-2 focus:ring-brand-green/30 focus:border-brand-green"
                     />
