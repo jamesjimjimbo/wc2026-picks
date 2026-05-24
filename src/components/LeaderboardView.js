@@ -105,7 +105,7 @@ export default function LeaderboardView({ leaderboard, currentUserId, leagueMemb
             : matchOdds.away_odds
           ) : null;
 
-          const payout = correct && oddsValue ? (pick.wager || 1) * oddsValue : 0;
+          const payout = correct && oddsValue ? (pick.wager ?? 1) * oddsValue : 0;
 
           return (
             <div
