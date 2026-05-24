@@ -21,7 +21,7 @@ export default function MatchCard({ match, pick, odds, result, onPick, isKnockou
   const drawOdds = odds?.draw_odds;
   const awayOdds = odds?.away_odds;
 
-  const wager = pick?.wager || 1;
+  const wager = pick?.wager ?? 1;
   const payout = correct ? (
     pick.pick === 'home' ? homeOdds :
     pick.pick === 'draw' ? drawOdds :
