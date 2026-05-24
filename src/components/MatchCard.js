@@ -128,7 +128,6 @@ export default function MatchCard({ match, pick, odds, result, onPick, isKnockou
               (() => {
                 // Max wager = available balance + this match's current wager (since it's already committed)
                 const maxWager = Math.floor((balance || 0) + wager);
-                const canIncrease = wager < maxWager;
                 const eliminated = maxWager === 0;
                 
                 if (eliminated) {
@@ -138,26 +137,27 @@ export default function MatchCard({ match, pick, odds, result, onPick, isKnockou
                 }
 
                 return (
-                  <div className="flex items-center gap-1">
-                    <button
-                      onClick={() => onWagerChange && onWagerChange(match.id, Math.max(1, wager - 1))}
-                      disabled={wager <= 1}
-                      className="w-5 h-5 flex items-center justify-center bg-surface-tertiary rounded text-[10px] font-bold text-text-muted hover:bg-surface-secondary disabled:opacity-30"
-                    >
-                      −
-                    </button>
-                    <span className="text-sm font-bold font-mono text-text-primary w-8 text-center">
-                      {wager.toFixed(0)}
-                    </span>
-                    <button
-                      onClick={() => onWagerChange && onWagerChange(match.id, Math.min(maxWager, wager + 1))}
-                      disabled={!canIncrease}
-                      className="w-5 h-5 flex items-center justify-center bg-surface-tertiary rounded text-[10px] font-bold text-text-muted hover:bg-surface-secondary disabled:opacity-30"
-                    >
-                      +
-                    </button>
+                  <div className="flex items-center gap-1.5">
+                    <input
+                      type="number"
+                      min={1}
+                      max={maxWager}
+                      value={wager}
+                      onChange={(e) => {
+                        const val = parseInt(e.target.value) || 0;
+                        const clamped = Math.max(0, Math.min(maxWager, val));
+                        if (onWagerChange) onWagerChange(match.id, clamped);
+                      }}
+                      onBlur={(e) => {
+                        // Enforce minimum of 1 on blur
+                        const val = parseInt(e.target.value) || 1;
+                        const clamped = Math.max(1, Math.min(maxWager, val));
+                        if (onWagerChange) onWagerChange(match.id, clamped);
+                      }}
+                      className="w-14 text-center text-sm font-bold font-mono text-text-primary bg-surface-secondary border border-border rounded-lg py-1 focus:outline-none focus:ring-2 focus:ring-brand-green/30 focus:border-brand-green"
+                    />
                     <span className="text-[9px] text-text-muted">
-                      pt{wager !== 1 ? 's' : ''} / {maxWager} avail
+                      / {maxWager} avail
                     </span>
                   </div>
                 );
