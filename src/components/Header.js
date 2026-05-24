@@ -3,25 +3,14 @@
 import { useState } from 'react';
 import { useAuth } from './AuthProvider';
 import { GROUP_MATCHES, hasMatchStarted, minutesUntilKickoff } from '@/data/matches';
+import { calculateDisplayBalance, calculateAvailableBalance } from '@/lib/balance';
 
 export default function Header({ picks, results, odds, view, setView, leagues, activeLeague, onSwitchLeague }) {
   const { profile, signOut } = useAuth();
   const [showLeaguePicker, setShowLeaguePicker] = useState(false);
 
   // Calculate balance
-  const balance = Object.entries(picks).reduce((total, [matchId, pick]) => {
-    const result = results[matchId];
-    if (!result) return total;
-    const matchOdds = odds[matchId];
-    if (!matchOdds) return total;
-    if (pick.pick === result.result) {
-      const oddsValue = pick.pick === 'home' ? matchOdds.home_odds
-        : pick.pick === 'draw' ? matchOdds.draw_odds
-        : matchOdds.away_odds;
-      return total + (pick.wager || 1) * (oddsValue || 1);
-    }
-    return total;
-  }, 0);
+  const balance = calculateDisplayBalance(picks, results, odds);
 
   // Count today's matches and unpicked ones
   const now = new Date();
