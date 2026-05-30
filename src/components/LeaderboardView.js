@@ -74,15 +74,15 @@ export default function LeaderboardView({ leaderboard, currentUserId, leagueMemb
     }
     if (!picks) return null;
 
-    const visibleMatches = kickedOffMatches.filter(m => picks[m.id]);
+    const matchesWithPicks = visibleMatches.filter(m => picks[m.id]);
 
-    if (visibleMatches.length === 0) {
+    if (matchesWithPicks.length === 0) {
       return <p className="text-[10px] text-text-muted text-center py-3">No visible picks yet</p>;
     }
 
     return (
       <div className="space-y-1 pt-2">
-        {visibleMatches.map(m => {
+        {matchesWithPicks.map(m => {
           const pick = picks[m.id];
           const result = results?.[m.id];
           const matchOdds = odds?.[m.id];
@@ -135,7 +135,7 @@ export default function LeaderboardView({ leaderboard, currentUserId, leagueMemb
         {/* Show count of hidden (not yet kicked off) picks */}
         {(() => {
           const totalPicks = Object.keys(picks).length;
-          const visibleCount = visibleMatches.length;
+          const visibleCount = matchesWithPicks.length;
           const hidden = totalPicks - visibleCount;
           if (hidden > 0) {
             return (
