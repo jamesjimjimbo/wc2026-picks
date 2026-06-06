@@ -5,7 +5,7 @@ import { FLAGS, SHORT_NAMES, formatKickoff, formatMatchDate, hasMatchStarted } f
 
 export default function MatchCard({ match, pick, odds, result, onPick, isKnockout, balance, onWagerChange }) {
   const [animating, setAnimating] = useState(false);
-  const [wagerInput, setWagerInput] = useState(null); // null = use pick.wager, string while editing
+  const [wagerInput, setWagerInput] = useState(null);
   const isLocked = hasMatchStarted(match.kickoff) || !!result;
   const correct = result && pick?.pick === result.result;
   const wrong = result && pick && pick.pick !== result.result;
@@ -28,7 +28,6 @@ export default function MatchCard({ match, pick, odds, result, onPick, isKnockou
     awayOdds
   ) : 0;
 
-  // For knockout: calculate potential payout based on current pick and wager
   const selectedOdds = pick?.pick === 'home' ? homeOdds :
     pick?.pick === 'draw' ? drawOdds :
     pick?.pick === 'away' ? awayOdds : null;
@@ -83,21 +82,30 @@ export default function MatchCard({ match, pick, odds, result, onPick, isKnockou
             )}
           </button>
 
-          {/* Draw */}
-          <button
-            onClick={() => handlePick('draw')}
-            disabled={isLocked}
-            className={`px-3 py-2 rounded-lg transition-all ${
-              pick?.pick === 'draw'
-                ? 'bg-amber-50 border-2 border-accent-amber'
-                : 'border-2 border-transparent hover:bg-surface-secondary'
-            } ${isLocked ? 'opacity-60 cursor-default' : 'cursor-pointer'}`}
-          >
-            <span className="block text-[10px] font-bold text-text-muted tracking-wider">DRAW</span>
-            {drawOdds > 0 && (
-              <span className="block text-[10px] text-text-muted font-mono mt-0.5">{drawOdds.toFixed(2)}</span>
-            )}
-          </button>
+          {/* Draw — hidden for knockout matches */}
+          {!isKnockout && (
+            <button
+              onClick={() => handlePick('draw')}
+              disabled={isLocked}
+              className={`px-3 py-2 rounded-lg transition-all ${
+                pick?.pick === 'draw'
+                  ? 'bg-amber-50 border-2 border-accent-amber'
+                  : 'border-2 border-transparent hover:bg-surface-secondary'
+              } ${isLocked ? 'opacity-60 cursor-default' : 'cursor-pointer'}`}
+            >
+              <span className="block text-[10px] font-bold text-text-muted tracking-wider">DRAW</span>
+              {drawOdds > 0 && (
+                <span className="block text-[10px] text-text-muted font-mono mt-0.5">{drawOdds.toFixed(2)}</span>
+              )}
+            </button>
+          )}
+
+          {/* VS divider for knockouts */}
+          {isKnockout && (
+            <div className="px-2">
+              <span className="text-[10px] font-bold text-text-muted">VS</span>
+            </div>
+          )}
 
           {/* Away team */}
           <button
@@ -127,7 +135,6 @@ export default function MatchCard({ match, pick, odds, result, onPick, isKnockou
             <span className="text-[9px] text-text-muted uppercase tracking-wider font-medium">Wager</span>
             {isKnockout && !isLocked && pick ? (
               (() => {
-                // Max wager = available balance + this match's current wager (since it's already committed)
                 const maxWager = Math.round(((balance || 0) + wager) * 10) / 10;
 
                 return (
