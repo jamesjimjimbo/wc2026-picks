@@ -1,6 +1,6 @@
 # World Cup 2026 Picks Tracker ⚽
 
-A web app for friends to predict FIFA World Cup 2026 match winners and compete for points. Supports multiple leagues — send different invite codes to different friend groups, everyone uses the same site.
+A web app for friends to predict FIFA World Cup 2026 match winners and compete for points. Supports multiple leagues — send different invite codes to different friend groups, everyone uses the same site. 
 
 
 ## How It Works
