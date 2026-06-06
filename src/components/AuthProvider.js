@@ -9,6 +9,7 @@ export function AuthProvider({ children }) {
   const [user, setUser] = useState(null);
   const [profile, setProfile] = useState(null);
   const [loading, setLoading] = useState(true);
+  const [passwordRecovery, setPasswordRecovery] = useState(false);
   const mountedRef = useRef(true);
 
   const authClient = getAuthClient();
@@ -22,23 +23,28 @@ export function AuthProvider({ children }) {
       return;
     }
 
-    // HARD DEADLINE: no matter what happens, stop showing the loading screen after 6s
+    // HARD DEADLINE: loading screen disappears after 6s no matter what
     const hardTimeout = setTimeout(() => {
       if (mountedRef.current && loading) {
-        console.warn('[AUTH] Hard timeout reached — forcing load complete');
         setLoading(false);
       }
     }, 6000);
 
-    // Listen for auth state changes — this is the ONLY way we detect sessions
     const { data: { subscription } } = authClient.auth.onAuthStateChange(
       (event, session) => {
         if (!mountedRef.current) return;
 
+        // Detect password recovery flow
+        if (event === 'PASSWORD_RECOVERY') {
+          setPasswordRecovery(true);
+          setUser(session?.user || null);
+          setLoading(false);
+          return;
+        }
+
         if (session?.user) {
           setUser(session.user);
 
-          // Fetch profile using the DB client (not auth client) with a timeout
           withTimeout(
             dbClient.from('profiles').select('*').eq('id', session.user.id).single(),
             5000,
@@ -50,8 +56,7 @@ export function AuthProvider({ children }) {
                 setLoading(false);
               }
             })
-            .catch((err) => {
-              console.warn('[AUTH] Profile fetch failed:', err.message);
+            .catch(() => {
               if (mountedRef.current) {
                 setProfile(null);
                 setLoading(false);
@@ -104,19 +109,48 @@ export function AuthProvider({ children }) {
     try {
       await withTimeout(authClient.auth.signOut(), 5000, 'signOut');
     } catch (e) {
-      // Force clear even if signOut hangs
-      console.warn('[AUTH] signOut timed out, clearing locally');
       try { localStorage.removeItem('wc2026-auth'); } catch (_) {}
     }
     setUser(null);
     setProfile(null);
   }
 
+  async function resetPassword(email) {
+    try {
+      const { error } = await withTimeout(
+        authClient.auth.resetPasswordForEmail(email, {
+          redirectTo: `${window.location.origin}`,
+        }),
+        10000,
+        'resetPassword'
+      );
+      return { error };
+    } catch (e) {
+      return { error: { message: e.message } };
+    }
+  }
+
+  async function updatePassword(newPassword) {
+    try {
+      const { error } = await withTimeout(
+        authClient.auth.updateUser({ password: newPassword }),
+        10000,
+        'updatePassword'
+      );
+      if (!error) setPasswordRecovery(false);
+      return { error };
+    } catch (e) {
+      return { error: { message: e.message } };
+    }
+  }
+
   return (
     <AuthContext.Provider value={{
       user, profile, loading,
+      passwordRecovery,
       signUp, signIn, signOut,
-      supabase: dbClient, // components use the DB client for all queries
+      resetPassword, updatePassword,
+      supabase: dbClient,
     }}>
       {children}
     </AuthContext.Provider>
