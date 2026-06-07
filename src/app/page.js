@@ -3,18 +3,19 @@
 import { useState, useEffect, useCallback } from 'react';
 import { AuthProvider, useAuth } from '@/components/AuthProvider';
 import { withTimeout } from '@/lib/supabase-browser';
+import { calculateAvailableBalance } from '@/lib/balance';
 import AuthForm from '@/components/AuthForm';
 import JoinLeague from '@/components/JoinLeague';
+import PasswordReset from '@/components/PasswordReset';
 import Header from '@/components/Header';
 import PicksView from '@/components/PicksView';
 import LeaderboardView from '@/components/LeaderboardView';
 import ResultsView from '@/components/ResultsView';
 import AdminView from '@/components/AdminView';
 import RulesView from '@/components/RulesView';
-import { calculateAvailableBalance } from '@/lib/balance';
 
 function AppContent() {
-  const { user, profile, loading, supabase } = useAuth();
+  const { user, profile, loading, passwordRecovery, supabase } = useAuth();
   const [view, setView] = useState('picks');
 
   // League state
@@ -48,22 +49,24 @@ function AppContent() {
     if (!supabase || !user) return;
 
     try {
-      // Step 1: get league IDs
-      const { data: memberships } = await withTimeout(
+      const { data: memberships, error: memErr } = await withTimeout(
         supabase.from('league_members').select('league_id').eq('user_id', user.id),
         5000,
         'load memberships'
       );
 
+      if (memErr) console.error('Membership load error:', memErr);
+
       if (memberships && memberships.length > 0) {
         const leagueIds = memberships.map(m => m.league_id);
 
-        // Step 2: fetch leagues
-        const { data: leaguesData } = await withTimeout(
+        const { data: leaguesData, error: leagueErr } = await withTimeout(
           supabase.from('leagues').select('id, name, invite_code, created_by').in('id', leagueIds),
           5000,
           'load leagues'
         );
+
+        if (leagueErr) console.error('Leagues load error:', leagueErr);
 
         if (leaguesData && leaguesData.length > 0) {
           const sorted = leaguesData.sort((a, b) => a.name.localeCompare(b.name));
@@ -96,7 +99,6 @@ function AppContent() {
     if (!supabase || !user) return;
 
     try {
-      // Run all data loads in parallel with individual timeouts
       const [picksResult, resultsResult, oddsResult, lbResult, koResult] = await Promise.allSettled([
         withTimeout(
           supabase.from('picks').select('*').eq('user_id', user.id),
@@ -120,7 +122,6 @@ function AppContent() {
         ),
       ]);
 
-      // Process picks
       if (picksResult.status === 'fulfilled' && picksResult.value.data) {
         const map = {};
         picksResult.value.data.forEach(p => {
@@ -129,26 +130,22 @@ function AppContent() {
         setPicks(map);
       }
 
-      // Process results
       if (resultsResult.status === 'fulfilled' && resultsResult.value.data) {
         const map = {};
         resultsResult.value.data.forEach(r => { map[r.match_id] = r; });
         setResults(map);
       }
 
-      // Process odds
       if (oddsResult.status === 'fulfilled' && oddsResult.value.data) {
         const map = {};
         oddsResult.value.data.forEach(o => { map[o.match_id] = o; });
         setOdds(map);
       }
 
-      // Process leaderboard
       if (lbResult.status === 'fulfilled' && lbResult.value.data) {
         setLeaderboard(lbResult.value.data);
       }
 
-      // Process knockout matches
       if (koResult.status === 'fulfilled' && koResult.value.data) {
         setKnockoutMatches(koResult.value.data);
       }
@@ -181,7 +178,7 @@ function AppContent() {
 
   function handleSwitchLeague(league) {
     setActiveLeague(league);
-    setLeagueMembers([]); // Clear immediately so stale data doesn't show
+    setLeagueMembers([]);
     loadLeagueMembers(league.id);
     setView('leaderboard');
   }
@@ -280,6 +277,9 @@ function AppContent() {
     }));
   }, [supabase, odds]);
 
+  // Calculate available balance for knockout wagers
+  const availableBalance = calculateAvailableBalance(picks, results, odds);
+
   // --- RENDER ---
 
   if (loading) {
@@ -293,8 +293,9 @@ function AppContent() {
     );
   }
 
-  // Calculate available balance for knockout wagers
-  const availableBalance = calculateAvailableBalance(picks, results, odds);
+  if (passwordRecovery) {
+    return <PasswordReset />;
+  }
 
   if (!user) {
     return <AuthForm />;
@@ -370,6 +371,10 @@ function AppContent() {
         />
       )}
 
+      {view === 'rules' && (
+        <RulesView onClose={() => setView('picks')} />
+      )}
+
       {view === 'admin' && (
         <AdminView
           results={results}
@@ -377,10 +382,6 @@ function AppContent() {
           onSaveResult={handleSaveResult}
           onSaveOdds={handleSaveOdds}
         />
-      )}
-
-      {view === 'rules' && (
-        <RulesView onClose={() => setView('picks')} />
       )}
     </div>
   );
