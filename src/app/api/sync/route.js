@@ -1,5 +1,9 @@
 import { createClient } from '@supabase/supabase-js';
 
+// Force dynamic — no caching on this route
+export const dynamic = 'force-dynamic';
+export const revalidate = 0;
+
 // API-Football team name → our team name mapping (verified June 2026)
 const TEAM_NAME_MAP = {
   'Mexico': 'Mexico', 'South Korea': 'South Korea', 'South Africa': 'South Africa',
@@ -134,7 +138,7 @@ export async function GET(request) {
     // --- FETCH ALL WC2026 FIXTURES ---
     const fixturesRes = await fetch(
       'https://v3.football.api-sports.io/fixtures?league=1&season=2026',
-      { headers: { 'x-apisports-key': API_KEY } }
+      { headers: { 'x-apisports-key': API_KEY }, cache: 'no-store' }
     );
     const fixturesData = await fixturesRes.json();
 
@@ -207,7 +211,7 @@ export async function GET(request) {
     // --- SYNC ODDS (skip matches that have results) ---
     const oddsRes = await fetch(
       'https://v3.football.api-sports.io/odds?league=1&season=2026&bookmaker=8',
-      { headers: { 'x-apisports-key': API_KEY } }
+      { headers: { 'x-apisports-key': API_KEY }, cache: 'no-store' }
     );
     const oddsData = await oddsRes.json();
 
