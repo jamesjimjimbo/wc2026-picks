@@ -1,7 +1,14 @@
 'use client';
 
 import { useState } from 'react';
-import { FLAGS, SHORT_NAMES, formatKickoff, formatMatchDate, hasMatchStarted } from '@/data/matches';
+import { FLAGS, SHORT_NAMES, formatKickoff, hasMatchStarted } from '@/data/matches';
+
+// Format date from kickoff timestamp in user's local timezone
+function localMatchDate(kickoffIso) {
+  return new Date(kickoffIso).toLocaleDateString('en-US', {
+    weekday: 'short', month: 'short', day: 'numeric'
+  });
+}
 
 export default function MatchCard({ match, pick, odds, result, onPick, isKnockout, balance, onWagerChange }) {
   const [animating, setAnimating] = useState(false);
@@ -52,8 +59,10 @@ export default function MatchCard({ match, pick, odds, result, onPick, isKnockou
         {/* Meta line */}
         <div className="text-center mb-2">
           <span className="text-[10px] text-text-muted">
-{match.venueShort && match.venueShort !== 'TBD' ? `${new Date(match.kickoff).toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' })} · ${formatKickoff(match.kickoff)} · ${match.venueShort}` : 'Date TBD'}
-        </span>
+            {match.venueShort && match.venueShort !== 'TBD'
+              ? `${localMatchDate(match.kickoff)} · ${formatKickoff(match.kickoff)} · ${match.venueShort}`
+              : 'Date TBD'}
+          </span>
           {isLocked && !result && (
             <span className="inline-block ml-2 text-[9px] bg-surface-tertiary text-text-muted px-1.5 py-0.5 rounded">
               🔒 LOCKED
