@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useMemo } from 'react';
-import { GROUPS, GROUP_MATCHES, KNOCKOUT_ROUNDS, KNOCKOUT_MATCH_SLOTS, FLAGS, SHORT_NAMES, formatMatchDate, formatKickoff, hasMatchStarted } from '@/data/matches';
+import { GROUPS, GROUP_MATCHES, KNOCKOUT_ROUNDS, KNOCKOUT_MATCH_SLOTS, FLAGS, SHORT_NAMES, hasMatchStarted } from '@/data/matches';
 import MatchCard from './MatchCard';
 
 const ROUND_PILLS = [
@@ -12,6 +12,18 @@ const ROUND_PILLS = [
   { id: 'SF', label: 'SF' },
   { id: 'F', label: 'Final' },
 ];
+
+// Get the local date string for a UTC kickoff time
+function localDateKey(kickoffIso) {
+  const d = new Date(kickoffIso);
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+}
+
+function localDateLabel(kickoffIso) {
+  return new Date(kickoffIso).toLocaleDateString('en-US', {
+    weekday: 'short', month: 'short', day: 'numeric'
+  });
+}
 
 export default function PicksView({ picks, odds, results, onPick, knockoutMatches, balance, onWagerChange }) {
   const [activeRound, setActiveRound] = useState('groups');
@@ -27,19 +39,19 @@ export default function PicksView({ picks, odds, results, onPick, knockoutMatche
     return slots.filter(s => picks[s.id]).length;
   };
 
-  // Group matches by date
+  // Group matches by LOCAL date (derived from kickoff time in user's timezone)
   const matchesByDate = useMemo(() => {
     const map = {};
     GROUP_MATCHES.forEach(m => {
-      if (!map[m.date]) map[m.date] = [];
-      map[m.date].push(m);
+      const key = localDateKey(m.kickoff);
+      if (!map[key]) map[key] = { key, label: localDateLabel(m.kickoff), matches: [] };
+      map[key].matches.push(m);
     });
-    return Object.entries(map)
-      .sort(([a], [b]) => a.localeCompare(b))
-      .map(([date, matches]) => ({
-        date,
-        label: formatMatchDate(date),
-        matches: matches.sort((a, b) => new Date(a.kickoff) - new Date(b.kickoff)),
+    return Object.values(map)
+      .sort((a, b) => a.key.localeCompare(b.key))
+      .map(group => ({
+        ...group,
+        matches: group.matches.sort((a, b) => new Date(a.kickoff) - new Date(b.kickoff)),
       }));
   }, []);
 
@@ -170,15 +182,15 @@ export default function PicksView({ picks, odds, results, onPick, knockoutMatche
           })}
 
           {/* BY DATE VIEW */}
-          {groupView === 'date' && matchesByDate.map(({ date, label, matches }) => {
+          {groupView === 'date' && matchesByDate.map(({ key, label, matches }) => {
             const datePicked = matches.filter(m => picks[m.id]).length;
-            const isExpanded = expandedDate === date;
+            const isExpanded = expandedDate === key;
             const allPicked = datePicked === matches.length;
 
             return (
-              <div key={date} className="mb-2">
+              <div key={key} className="mb-2">
                 <button
-                  onClick={() => setExpandedDate(isExpanded ? null : date)}
+                  onClick={() => setExpandedDate(isExpanded ? null : key)}
                   className="w-full flex items-center gap-3 py-3 group"
                 >
                   <span className={`text-xs font-bold tracking-wide px-2.5 py-1 rounded-md ${
