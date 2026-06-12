@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useMemo } from 'react';
 import { GROUPS, GROUP_MATCHES, KNOCKOUT_ROUNDS, KNOCKOUT_MATCH_SLOTS, FLAGS, SHORT_NAMES, formatMatchDate, formatKickoff, hasMatchStarted } from '@/data/matches';
 import MatchCard from './MatchCard';
 
@@ -15,7 +15,9 @@ const ROUND_PILLS = [
 
 export default function PicksView({ picks, odds, results, onPick, knockoutMatches, balance, onWagerChange }) {
   const [activeRound, setActiveRound] = useState('groups');
+  const [groupView, setGroupView] = useState('group'); // 'group' or 'date'
   const [expandedGroup, setExpandedGroup] = useState(null);
+  const [expandedDate, setExpandedDate] = useState(null);
   const groupKeys = Object.keys(GROUPS);
 
   // Count picks per round
@@ -24,6 +26,22 @@ export default function PicksView({ picks, odds, results, onPick, knockoutMatche
     const slots = KNOCKOUT_MATCH_SLOTS.filter(s => s.round === roundId);
     return slots.filter(s => picks[s.id]).length;
   };
+
+  // Group matches by date
+  const matchesByDate = useMemo(() => {
+    const map = {};
+    GROUP_MATCHES.forEach(m => {
+      if (!map[m.date]) map[m.date] = [];
+      map[m.date].push(m);
+    });
+    return Object.entries(map)
+      .sort(([a], [b]) => a.localeCompare(b))
+      .map(([date, matches]) => ({
+        date,
+        label: formatMatchDate(date),
+        matches: matches.sort((a, b) => new Date(a.kickoff) - new Date(b.kickoff)),
+      }));
+  }, []);
 
   return (
     <div className="px-4 pb-24">
@@ -61,6 +79,32 @@ export default function PicksView({ picks, odds, results, onPick, knockoutMatche
       {/* GROUP STAGE */}
       {activeRound === 'groups' && (
         <>
+          {/* Group/Date toggle */}
+          <div className="flex justify-center mb-2">
+            <div className="flex bg-surface-tertiary rounded-lg p-0.5">
+              <button
+                onClick={() => setGroupView('group')}
+                className={`px-3 py-1 text-[10px] font-medium rounded-md transition-all ${
+                  groupView === 'group'
+                    ? 'bg-white text-text-primary shadow-sm'
+                    : 'text-text-muted'
+                }`}
+              >
+                By Group
+              </button>
+              <button
+                onClick={() => setGroupView('date')}
+                className={`px-3 py-1 text-[10px] font-medium rounded-md transition-all ${
+                  groupView === 'date'
+                    ? 'bg-white text-text-primary shadow-sm'
+                    : 'text-text-muted'
+                }`}
+              >
+                By Date
+              </button>
+            </div>
+          </div>
+
           {/* Progress */}
           <div className="text-center pb-2">
             <div className="h-1 bg-surface-tertiary rounded-full max-w-xs mx-auto">
@@ -74,7 +118,8 @@ export default function PicksView({ picks, odds, results, onPick, knockoutMatche
             </p>
           </div>
 
-          {groupKeys.map(g => {
+          {/* BY GROUP VIEW */}
+          {groupView === 'group' && groupKeys.map(g => {
             const groupMatches = GROUP_MATCHES.filter(m => m.group === g);
             const groupPicked = groupMatches.filter(m => picks[m.id]).length;
             const isExpanded = expandedGroup === g;
@@ -123,6 +168,56 @@ export default function PicksView({ picks, odds, results, onPick, knockoutMatche
               </div>
             );
           })}
+
+          {/* BY DATE VIEW */}
+          {groupView === 'date' && matchesByDate.map(({ date, label, matches }) => {
+            const datePicked = matches.filter(m => picks[m.id]).length;
+            const isExpanded = expandedDate === date;
+            const allPicked = datePicked === matches.length;
+
+            return (
+              <div key={date} className="mb-2">
+                <button
+                  onClick={() => setExpandedDate(isExpanded ? null : date)}
+                  className="w-full flex items-center gap-3 py-3 group"
+                >
+                  <span className={`text-xs font-bold tracking-wide px-2.5 py-1 rounded-md ${
+                    allPicked
+                      ? 'bg-brand-green-bg text-brand-green-dark'
+                      : 'bg-surface-tertiary text-text-secondary'
+                  }`}>
+                    {label}
+                  </span>
+                  <span className="flex-1 h-px bg-border" />
+                  <span className="text-[10px] text-text-muted font-mono">
+                    {matches.length} match{matches.length !== 1 ? 'es' : ''}
+                  </span>
+                  <span className={`text-[10px] font-mono ${allPicked ? 'text-brand-green' : 'text-text-muted'}`}>
+                    {datePicked}/{matches.length}
+                  </span>
+                  <span className={`text-text-muted text-[10px] transition-transform ${isExpanded ? 'rotate-180' : ''}`}>
+                    ▼
+                  </span>
+                </button>
+
+                {isExpanded && (
+                  <div className="space-y-2 pb-2">
+                    {matches.map(m => (
+                      <MatchCard
+                        key={m.id}
+                        match={m}
+                        pick={picks[m.id]}
+                        odds={odds[m.id]}
+                        result={results[m.id]}
+                        onPick={onPick}
+                        isKnockout={false}
+                      />
+                    ))}
+                  </div>
+                )}
+              </div>
+            );
+          })}
         </>
       )}
 
@@ -145,16 +240,13 @@ export default function PicksView({ picks, odds, results, onPick, knockoutMatche
 
 // Knockout round sub-component
 function KnockoutRoundView({ roundId, picks, odds, results, onPick, knockoutMatches, balance, onWagerChange }) {
-  // For the Final pill, show both 3rd place and final
   const roundIds = roundId === 'F' ? ['3P', 'F'] : [roundId];
-  const roundInfo = KNOCKOUT_ROUNDS.filter(r => roundIds.includes(r.id));
 
   return (
     <div>
       {roundIds.map(rId => {
         const info = KNOCKOUT_ROUNDS.find(r => r.id === rId);
         const slots = KNOCKOUT_MATCH_SLOTS.filter(s => s.round === rId);
-        // Check if admin has populated actual matches for this round
         const populatedMatches = knockoutMatches?.filter(m => m.round === rId) || [];
 
         return (
@@ -166,11 +258,9 @@ function KnockoutRoundView({ roundId, picks, odds, results, onPick, knockoutMatc
 
             <div className="space-y-2">
               {slots.map(slot => {
-                // Check if this slot has been populated with real teams
                 const populated = populatedMatches.find(m => m.match_id === slot.id);
 
                 if (populated && populated.home && populated.away) {
-                  // Real match — show full match card
                   const match = {
                     id: slot.id,
                     home: populated.home,
@@ -194,7 +284,6 @@ function KnockoutRoundView({ roundId, picks, odds, results, onPick, knockoutMatc
                   );
                 }
 
-                // TBD match — show placeholder card
                 return (
                   <div key={slot.id} className="bg-white rounded-xl border border-border border-dashed">
                     <div className="px-3 py-4">
