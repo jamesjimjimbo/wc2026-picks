@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useMemo, useEffect } from 'react';
+import { useRouter, usePathname, useSearchParams } from 'next/navigation';
 import { GROUPS, GROUP_MATCHES, KNOCKOUT_ROUNDS, KNOCKOUT_MATCH_SLOTS, FLAGS, SHORT_NAMES, hasMatchStarted } from '@/data/matches';
 import MatchCard from './MatchCard';
 
@@ -32,9 +33,30 @@ function todayDateKey() {
 }
 
 export default function PicksView({ picks, odds, results, onPick, knockoutMatches, balance, onWagerChange }) {
-  const [activeRound, setActiveRound] = useState('groups');
-  const [groupView, setGroupView] = useState('group'); // 'group' or 'date'
   const [expandedGroup, setExpandedGroup] = useState(null);
+
+  // Round and Group/Date toggle are driven by the URL so they survive refreshes
+  // and are shareable. The defaults ('groups' / 'group') stay out of the URL.
+  const router = useRouter();
+  const pathname = usePathname();
+  const searchParams = useSearchParams();
+
+  const setParam = (key, value, defaultValue) => {
+    const params = new URLSearchParams(searchParams);
+    if (value === defaultValue) params.delete(key);
+    else params.set(key, value);
+    const qs = params.toString();
+    router.replace(qs ? `${pathname}?${qs}` : pathname, { scroll: false });
+  };
+
+  const validRounds = ROUND_PILLS.map(r => r.id);
+  const roundParam = searchParams.get('round');
+  const activeRound = validRounds.includes(roundParam) ? roundParam : 'groups';
+  const setActiveRound = (next) => setParam('round', next, 'groups');
+
+  const groupView = searchParams.get('groupBy') === 'date' ? 'date' : 'group';
+  const setGroupView = (next) => setParam('groupBy', next, 'group');
+
   const [expandedDate, setExpandedDate] = useState(null);
   const groupKeys = Object.keys(GROUPS);
 
