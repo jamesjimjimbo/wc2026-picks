@@ -1,6 +1,7 @@
 'use client';
 
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, Suspense } from 'react';
+import { useRouter, usePathname, useSearchParams } from 'next/navigation';
 import { AuthProvider, useAuth } from '@/components/AuthProvider';
 import { withTimeout } from '@/lib/supabase-browser';
 import { calculateAvailableBalance } from '@/lib/balance';
@@ -16,7 +17,25 @@ import RulesView from '@/components/RulesView';
 
 function AppContent() {
   const { user, profile, loading, passwordRecovery, supabase } = useAuth();
-  const [view, setView] = useState('picks');
+
+  // Top-level view is driven by the URL (?view=) so it survives refreshes and
+  // is shareable. 'picks' is the default and stays out of the URL.
+  const router = useRouter();
+  const pathname = usePathname();
+  const searchParams = useSearchParams();
+  const VALID_VIEWS = ['picks', 'leaderboard', 'results', 'rules', 'admin'];
+  const viewParam = searchParams.get('view');
+  const requestedView = VALID_VIEWS.includes(viewParam) ? viewParam : 'picks';
+  // Admin view is gated on is_admin; non-admins (or before profile loads) fall
+  // back to picks so ?view=admin can't expose the admin UI.
+  const view = (requestedView === 'admin' && !profile?.is_admin) ? 'picks' : requestedView;
+  const setView = (next) => {
+    const params = new URLSearchParams(searchParams);
+    if (next === 'picks') params.delete('view');
+    else params.set('view', next);
+    const qs = params.toString();
+    router.replace(qs ? `${pathname}?${qs}` : pathname, { scroll: false });
+  };
 
   // League state
   const [leagues, setLeagues] = useState([]);
@@ -390,7 +409,9 @@ function AppContent() {
 export default function Home() {
   return (
     <AuthProvider>
-      <AppContent />
+      <Suspense fallback={null}>
+        <AppContent />
+      </Suspense>
     </AuthProvider>
   );
 }
