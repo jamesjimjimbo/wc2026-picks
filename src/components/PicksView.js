@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useEffect } from 'react';
 import { GROUPS, GROUP_MATCHES, KNOCKOUT_ROUNDS, KNOCKOUT_MATCH_SLOTS, FLAGS, SHORT_NAMES, hasMatchStarted } from '@/data/matches';
 import MatchCard from './MatchCard';
 
@@ -23,6 +23,12 @@ function localDateLabel(kickoffIso) {
   return new Date(kickoffIso).toLocaleDateString('en-US', {
     weekday: 'short', month: 'short', day: 'numeric'
   });
+}
+
+// Today's local date key, matching the format produced by localDateKey
+function todayDateKey() {
+  const d = new Date();
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
 }
 
 export default function PicksView({ picks, odds, results, onPick, knockoutMatches, balance, onWagerChange }) {
@@ -54,6 +60,15 @@ export default function PicksView({ picks, odds, results, onPick, knockoutMatche
         matches: group.matches.sort((a, b) => new Date(a.kickoff) - new Date(b.kickoff)),
       }));
   }, []);
+
+  // Auto-expand today's games (client-only to avoid SSR hydration mismatch).
+  // Only fires once on mount; later user toggles are preserved.
+  useEffect(() => {
+    const todayKey = todayDateKey();
+    if (matchesByDate.some(d => d.key === todayKey)) {
+      setExpandedDate(todayKey);
+    }
+  }, [matchesByDate]);
 
   return (
     <div className="px-4 pb-24">
