@@ -338,6 +338,7 @@ function AppContent() {
         leagues={leagues}
         activeLeague={activeLeague}
         onSwitchLeague={handleSwitchLeague}
+        knockoutMatchCount={knockoutMatches.length}
       />
 
       {view === 'picks' && (
