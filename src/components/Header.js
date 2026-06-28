@@ -5,12 +5,15 @@ import { useAuth } from './AuthProvider';
 import { GROUP_MATCHES, hasMatchStarted, minutesUntilKickoff } from '@/data/matches';
 import { calculateDisplayBalance, calculateAvailableBalance } from '@/lib/balance';
 
-export default function Header({ picks, results, odds, view, setView, leagues, activeLeague, onSwitchLeague }) {
+export default function Header({ picks, results, odds, view, setView, leagues, activeLeague, onSwitchLeague, knockoutMatchCount }) {
   const { profile, signOut } = useAuth();
   const [showLeaguePicker, setShowLeaguePicker] = useState(false);
 
   // Calculate balance
   const balance = calculateDisplayBalance(picks, results, odds);
+
+  // Total available matches = 72 group + however many knockout matches exist
+  const totalMatches = 72 + (knockoutMatchCount || 0);
 
   // Count today's matches and unpicked ones
   const now = new Date();
@@ -115,7 +118,7 @@ export default function Header({ picks, results, odds, view, setView, leagues, a
           <div className="flex items-center gap-1.5">
             <div className="w-1.5 h-1.5 rounded-full bg-brand-green" />
             <span className="text-[11px] text-text-secondary font-mono">
-              {totalPicked}/72 picked
+              {totalPicked}/{totalMatches} picked
             </span>
           </div>
           {totalDecided > 0 && (
