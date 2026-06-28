@@ -237,12 +237,14 @@ export async function GET(request) {
           const drawOdds = parseFloat(values.find(v => v.value === 'Draw')?.odd || 0);
           const awayOdds = parseFloat(values.find(v => v.value === 'Away')?.odd || 0);
 
-          if (homeOdds > 0 && drawOdds > 0 && awayOdds > 0) {
+      if (homeOdds > 0 && drawOdds > 0 && awayOdds > 0) {
+            // Apply 10% boost to make EV positive (removes bookmaker vig + adds edge)
+            const ODDS_BOOST = 1.10;
             const { error } = await supabase.from('match_odds').upsert({
               match_id: ourMatch.id,
-              home_odds: homeOdds,
-              draw_odds: drawOdds,
-              away_odds: awayOdds,
+              home_odds: Math.round(homeOdds * ODDS_BOOST * 100) / 100,
+              draw_odds: Math.round(drawOdds * ODDS_BOOST * 100) / 100,
+              away_odds: Math.round(awayOdds * ODDS_BOOST * 100) / 100,
               source: bookie.name || 'API-Football',
             }, { onConflict: 'match_id' });
 
