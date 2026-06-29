@@ -3,12 +3,12 @@
 import { useMemo, useState } from 'react';
 import { useAuth } from './AuthProvider';
 import { withTimeout } from '@/lib/supabase-browser';
-import { GROUP_MATCHES, FLAGS, SHORT_NAMES, hasMatchStarted, formatMatchDate } from '@/data/matches';
+import { GROUP_MATCHES, KNOCKOUT_MATCH_SLOTS, FLAGS, SHORT_NAMES, hasMatchStarted, formatMatchDate } from '@/data/matches';
 
-export default function LeaderboardView({ leaderboard, currentUserId, leagueMembers, activeLeague, results, odds }) {
+export default function LeaderboardView({ leaderboard, currentUserId, leagueMembers, activeLeague, results, odds, knockoutMatches }) {
   const { supabase } = useAuth();
   const [expandedUser, setExpandedUser] = useState(null);
-  const [userPicks, setUserPicks] = useState({}); // { userId: { matchId: pick } }
+  const [userPicks, setUserPicks] = useState({});
   const [loadingPicks, setLoadingPicks] = useState(false);
 
   // Check if any knockout match has a result
@@ -39,7 +39,6 @@ export default function LeaderboardView({ leaderboard, currentUserId, leagueMemb
 
     setExpandedUser(userId);
 
-    // Load this user's picks if we haven't already
     if (!userPicks[userId] && supabase) {
       setLoadingPicks(true);
       try {
@@ -60,12 +59,45 @@ export default function LeaderboardView({ leaderboard, currentUserId, leagueMemb
     }
   }
 
-  // Get matches where picks should be visible (kicked off OR has a result)
-  const visibleMatches = useMemo(() => {
-    return GROUP_MATCHES.filter(m => hasMatchStarted(m.kickoff) || results?.[m.id]).sort(
-      (a, b) => new Date(b.kickoff) - new Date(a.kickoff)
-    );
-  }, [results]);
+  // Build a unified list of all matches (group + knockout) with enough info to display
+  const allVisibleMatches = useMemo(() => {
+    const matches = [];
+
+    // Group stage matches that have kicked off or have a result
+    for (const m of GROUP_MATCHES) {
+      if (hasMatchStarted(m.kickoff) || results?.[m.id]) {
+        matches.push({
+          id: m.id,
+          home: m.home,
+          away: m.away,
+          kickoff: m.kickoff,
+          isKnockout: false,
+        });
+      }
+    }
+
+    // Knockout matches that have kicked off or have a result
+    if (knockoutMatches) {
+      for (const km of knockoutMatches) {
+        if (!km.home || !km.away) continue;
+        const kicked = km.kickoff && hasMatchStarted(km.kickoff);
+        const hasResult = results?.[km.match_id];
+        if (kicked || hasResult) {
+          matches.push({
+            id: km.match_id,
+            home: km.home,
+            away: km.away,
+            kickoff: km.kickoff,
+            isKnockout: true,
+          });
+        }
+      }
+    }
+
+    // Sort most recent first
+    matches.sort((a, b) => new Date(b.kickoff) - new Date(a.kickoff));
+    return matches;
+  }, [results, knockoutMatches]);
 
   function renderUserPicks(userId) {
     const picks = userPicks[userId];
@@ -74,7 +106,7 @@ export default function LeaderboardView({ leaderboard, currentUserId, leagueMemb
     }
     if (!picks) return null;
 
-    const matchesWithPicks = visibleMatches.filter(m => picks[m.id]);
+    const matchesWithPicks = allVisibleMatches.filter(m => picks[m.id]);
 
     if (matchesWithPicks.length === 0) {
       return <p className="text-[10px] text-text-muted text-center py-3">No visible picks yet</p>;
@@ -86,12 +118,9 @@ export default function LeaderboardView({ leaderboard, currentUserId, leagueMemb
           const pick = picks[m.id];
           const result = results?.[m.id];
           const matchOdds = odds?.[m.id];
-          const correct = result && pick.pick === result.result;
-          const wrong = result && pick.pick !== result.result;
+          const correct = result?.result && pick.pick === result.result;
+          const wrong = result?.result && pick.pick !== result.result;
 
-          const pickedTeam = pick.pick === 'home' ? m.home
-            : pick.pick === 'away' ? m.away
-            : 'Draw';
           const pickedShort = pick.pick === 'home' ? SHORT_NAMES[m.home]
             : pick.pick === 'away' ? SHORT_NAMES[m.away]
             : 'DRAW';
@@ -105,7 +134,11 @@ export default function LeaderboardView({ leaderboard, currentUserId, leagueMemb
             : matchOdds.away_odds
           ) : null;
 
-          const payout = correct && oddsValue ? (pick.wager ?? 1) * oddsValue : 0;
+          const wager = pick.wager ?? 1;
+          const payout = correct && oddsValue ? wager * oddsValue : 0;
+
+          // Round label for knockout matches
+          const roundLabel = m.isKnockout ? m.id.split('-')[0] : null;
 
           return (
             <div
@@ -114,18 +147,26 @@ export default function LeaderboardView({ leaderboard, currentUserId, leagueMemb
                 correct ? 'bg-green-50/60' : wrong ? 'bg-red-50/40' : 'bg-surface-secondary'
               }`}
             >
+              {roundLabel && (
+                <span className="text-[8px] font-bold text-text-muted bg-surface-tertiary px-1 py-0.5 rounded">
+                  {roundLabel}
+                </span>
+              )}
               <span className="text-sm">{pickedFlag}</span>
               <span className="font-semibold text-text-primary">{pickedShort}</span>
-              <span className="text-text-muted">
+              <span className="text-text-muted truncate">
                 {FLAGS[m.home]} {SHORT_NAMES[m.home]} vs {SHORT_NAMES[m.away]} {FLAGS[m.away]}
               </span>
               <span className="flex-1" />
-              {result && (
+              {m.isKnockout && wager > 1 && (
+                <span className="text-[9px] text-text-muted font-mono">{wager}pt</span>
+              )}
+              {result?.result && (
                 <span className={`font-bold font-mono ${correct ? 'text-brand-green' : 'text-red-400'}`}>
-                  {correct ? `+${payout.toFixed(1)}` : '0'}
+                  {correct ? `+${payout.toFixed(1)}` : `-${wager.toFixed(1)}`}
                 </span>
               )}
-              {!result && (
+              {!result?.result && (
                 <span className="text-text-muted font-mono">⏳</span>
               )}
             </div>
