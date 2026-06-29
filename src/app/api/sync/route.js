@@ -351,27 +351,53 @@ export async function GET(request) {
           continue;
         }
 
+        const isKnockoutMatch = ourMatch.id?.startsWith('R') || ourMatch.id?.startsWith('Q') || ourMatch.id?.startsWith('S') || ourMatch.id?.startsWith('F') || ourMatch.id?.startsWith('3');
+
         const bookmakers = oddsFixture.bookmakers || [];
         for (const bookie of bookmakers) {
-          const matchWinner = bookie.bets?.find(b => b.id === 1 || b.name === 'Match Winner');
-          if (!matchWinner) continue;
+          if (isKnockoutMatch) {
+            // KNOCKOUT: Use "To Qualify" market (bet ID 61) — two-way, no draw
+            const toQualify = bookie.bets?.find(b => b.id === 61 || b.name === 'To Qualify');
+            if (!toQualify) continue;
 
-          const values = matchWinner.values || [];
-          const homeOdds = parseFloat(values.find(v => v.value === 'Home')?.odd || 0);
-          const drawOdds = parseFloat(values.find(v => v.value === 'Draw')?.odd || 0);
-          const awayOdds = parseFloat(values.find(v => v.value === 'Away')?.odd || 0);
+            const values = toQualify.values || [];
+            const homeOdds = parseFloat(values.find(v => v.value === 'Home')?.odd || 0);
+            const awayOdds = parseFloat(values.find(v => v.value === 'Away')?.odd || 0);
 
-          if (homeOdds > 0 && drawOdds > 0 && awayOdds > 0) {
-            const { error } = await supabase.from('match_odds').upsert({
-              match_id: ourMatch.id,
-              home_odds: Math.round(homeOdds * ODDS_BOOST * 100) / 100,
-              draw_odds: Math.round(drawOdds * ODDS_BOOST * 100) / 100,
-              away_odds: Math.round(awayOdds * ODDS_BOOST * 100) / 100,
-              source: bookie.name || 'API-Football',
-            }, { onConflict: 'match_id' });
+            if (homeOdds > 0 && awayOdds > 0) {
+              const { error } = await supabase.from('match_odds').upsert({
+                match_id: ourMatch.id,
+                home_odds: Math.round(homeOdds * ODDS_BOOST * 100) / 100,
+                draw_odds: 0, // No draw in knockouts
+                away_odds: Math.round(awayOdds * ODDS_BOOST * 100) / 100,
+                source: bookie.name || 'API-Football',
+              }, { onConflict: 'match_id' });
 
-            if (error) output.errors.push({ matchId: ourMatch.id, type: 'odds', error: error.message });
-            else output.odds_updated++;
+              if (error) output.errors.push({ matchId: ourMatch.id, type: 'odds', error: error.message });
+              else output.odds_updated++;
+            }
+          } else {
+            // GROUP STAGE: Use "Match Winner" market (bet ID 1) — three-way with draw
+            const matchWinner = bookie.bets?.find(b => b.id === 1 || b.name === 'Match Winner');
+            if (!matchWinner) continue;
+
+            const values = matchWinner.values || [];
+            const homeOdds = parseFloat(values.find(v => v.value === 'Home')?.odd || 0);
+            const drawOdds = parseFloat(values.find(v => v.value === 'Draw')?.odd || 0);
+            const awayOdds = parseFloat(values.find(v => v.value === 'Away')?.odd || 0);
+
+            if (homeOdds > 0 && drawOdds > 0 && awayOdds > 0) {
+              const { error } = await supabase.from('match_odds').upsert({
+                match_id: ourMatch.id,
+                home_odds: Math.round(homeOdds * ODDS_BOOST * 100) / 100,
+                draw_odds: Math.round(drawOdds * ODDS_BOOST * 100) / 100,
+                away_odds: Math.round(awayOdds * ODDS_BOOST * 100) / 100,
+                source: bookie.name || 'API-Football',
+              }, { onConflict: 'match_id' });
+
+              if (error) output.errors.push({ matchId: ourMatch.id, type: 'odds', error: error.message });
+              else output.odds_updated++;
+            }
           }
           break;
         }
