@@ -158,7 +158,7 @@ export default function LeaderboardView({ leaderboard, currentUserId, leagueMemb
                 {FLAGS[m.home]} {SHORT_NAMES[m.home]} vs {SHORT_NAMES[m.away]} {FLAGS[m.away]}
               </span>
               <span className="flex-1" />
-              {m.isKnockout && wager > 1 && (
+              {m.isKnockout && wager && (
                 <span className="text-[9px] text-text-muted font-mono">{wager}pt</span>
               )}
               {result?.result && (
