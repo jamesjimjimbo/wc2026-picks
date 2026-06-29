@@ -361,6 +361,7 @@ function AppContent() {
           activeLeague={activeLeague}
           results={results}
           odds={odds}
+          knockoutMatches={knockoutMatches}
         />
       )}
 
