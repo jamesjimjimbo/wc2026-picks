@@ -4,6 +4,9 @@ import { createClient } from '@supabase/supabase-js';
 export const dynamic = 'force-dynamic';
 export const revalidate = 0;
 
+// 10% odds boost to make EV positive (removes bookmaker vig + adds edge)
+const ODDS_BOOST = 1.10;
+
 // API-Football team name → our team name mapping (verified June 2026)
 const TEAM_NAME_MAP = {
   'Mexico': 'Mexico', 'South Korea': 'South Korea', 'South Africa': 'South Africa',
@@ -102,6 +105,16 @@ const GROUP_MATCHES = [
   { id: "L6", home: "Croatia", away: "Ghana" },
 ];
 
+// API-Football round names → our round IDs
+const ROUND_MAP = {
+  'Round of 32': 'R32',
+  'Round of 16': 'R16',
+  'Quarter-finals': 'QF',
+  'Semi-finals': 'SF',
+  '3rd Place': '3P',
+  'Final': 'F',
+};
+
 function normalizeTeam(name) {
   return TEAM_NAME_MAP[name] || name;
 }
@@ -124,7 +137,8 @@ export async function GET(request) {
 
   const output = {
     odds_updated: 0, odds_skipped_has_result: 0,
-    results_updated: 0,
+    results_updated: 0, live_scores_updated: 0,
+    knockout_matches_synced: 0,
     auto_bets_placed: 0,
     errors: [],
     fixtures_checked: 0, matches_mapped: 0,
@@ -132,8 +146,8 @@ export async function GET(request) {
 
   try {
     // --- LOAD EXISTING RESULTS (to know which matches are already decided) ---
-    const { data: existingResults } = await supabase.from('match_results').select('match_id');
-    const decidedMatchIds = new Set((existingResults || []).map(r => r.match_id));
+    const { data: existingResults } = await supabase.from('match_results').select('match_id, result');
+    const decidedMatchIds = new Set((existingResults || []).filter(r => r.result).map(r => r.match_id));
 
     // --- FETCH ALL WC2026 FIXTURES ---
     const fixturesRes = await fetch(
@@ -152,58 +166,168 @@ export async function GET(request) {
     const fixtures = fixturesData.response || [];
     output.fixtures_checked = fixtures.length;
 
-    // Build fixture-to-match mapping
+    // Build fixture-to-match mapping for group stage
     const fixtureMatchMap = {};
+    // Track knockout fixtures separately
+    const knockoutFixtures = [];
+
     for (const fixture of fixtures) {
       const homeTeam = fixture.teams?.home?.name;
       const awayTeam = fixture.teams?.away?.name;
+      const round = fixture.league?.round;
+
+      // Check if it's a group stage match
       const ourMatch = findOurMatch(homeTeam, awayTeam);
       if (ourMatch) {
         fixtureMatchMap[fixture.fixture.id] = ourMatch;
         output.matches_mapped++;
       }
+
+      // Check if it's a knockout match
+      const roundId = ROUND_MAP[round];
+      if (roundId) {
+        knockoutFixtures.push({
+          fixtureId: fixture.fixture.id,
+          roundId,
+          home: normalizeTeam(homeTeam),
+          away: normalizeTeam(awayTeam),
+          venue: fixture.fixture?.venue?.name || 'TBD',
+          date: fixture.fixture?.date?.substring(0, 10) || 'TBD',
+          kickoff: fixture.fixture?.date || null,
+          status: fixture.fixture?.status?.short,
+          goalsHome: fixture.goals?.home,
+          goalsAway: fixture.goals?.away,
+          penaltyHome: fixture.score?.penalty?.home,
+          penaltyAway: fixture.score?.penalty?.away,
+        });
+      }
     }
 
-    // --- SYNC RESULTS ---
+    // --- SYNC KNOCKOUT MATCHES ---
+    const knockoutByRound = {};
+    for (const kf of knockoutFixtures) {
+      if (!knockoutByRound[kf.roundId]) knockoutByRound[kf.roundId] = [];
+      knockoutByRound[kf.roundId].push(kf);
+    }
+
+    for (const [roundId, matches] of Object.entries(knockoutByRound)) {
+      matches.sort((a, b) => (a.kickoff || '').localeCompare(b.kickoff || ''));
+
+      for (let i = 0; i < matches.length; i++) {
+        const kf = matches[i];
+        const matchId = `${roundId}-${i + 1}`;
+
+        // Upsert into knockout_matches
+        const { error: koErr } = await supabase.from('knockout_matches').upsert({
+          match_id: matchId,
+          round: roundId,
+          home: kf.home,
+          away: kf.away,
+          venue: kf.venue,
+          date: kf.date,
+          kickoff: kf.kickoff,
+        }, { onConflict: 'match_id' });
+
+        if (koErr) {
+          output.errors.push({ matchId, type: 'knockout_match', error: koErr.message });
+        } else {
+          output.knockout_matches_synced++;
+        }
+
+        // Upsert into match_kickoffs for pick deadline enforcement
+        if (kf.kickoff) {
+          await supabase.from('match_kickoffs').upsert({
+            match_id: matchId,
+            kickoff: kf.kickoff,
+          }, { onConflict: 'match_id' });
+        }
+
+        // Map fixture ID to our match ID for odds
+        fixtureMatchMap[kf.fixtureId] = { id: matchId };
+
+        // --- KNOCKOUT LIVE SCORES ---
+        const isLive = ['1H', 'HT', '2H', 'ET', 'BT', 'P'].includes(kf.status);
+        const isFinal = ['FT', 'AET', 'PEN'].includes(kf.status);
+
+        if (isLive && kf.goalsHome != null && kf.goalsAway != null) {
+          await supabase.from('match_results').upsert({
+            match_id: matchId,
+            home_score: kf.goalsHome,
+            away_score: kf.goalsAway,
+          }, { onConflict: 'match_id', ignoreDuplicates: false });
+          output.live_scores_updated++;
+        }
+
+        // --- KNOCKOUT FINAL RESULTS ---
+        if (isFinal) {
+          let result;
+          if (kf.status === 'PEN' && kf.penaltyHome != null && kf.penaltyAway != null) {
+            result = kf.penaltyHome > kf.penaltyAway ? 'home' : 'away';
+          } else {
+            result = kf.goalsHome > kf.goalsAway ? 'home' : 'away';
+          }
+
+          if (!decidedMatchIds.has(matchId)) {
+            const { error: resErr } = await supabase.from('match_results').upsert({
+              match_id: matchId,
+              result,
+              home_score: kf.goalsHome,
+              away_score: kf.goalsAway,
+            }, { onConflict: 'match_id' });
+
+            if (resErr) output.errors.push({ matchId, type: 'ko_result', error: resErr.message });
+            else {
+              output.results_updated++;
+              decidedMatchIds.add(matchId);
+            }
+          }
+        }
+      }
+    }
+
+    // --- SYNC GROUP STAGE RESULTS ---
     for (const fixture of fixtures) {
       const ourMatch = fixtureMatchMap[fixture.fixture.id];
       if (!ourMatch) continue;
+      // Skip knockout matches (already handled above)
+      if (ourMatch.id?.startsWith('R') || ourMatch.id?.startsWith('Q') || ourMatch.id?.startsWith('S') || ourMatch.id?.startsWith('F') || ourMatch.id?.startsWith('3')) continue;
 
       const status = fixture.fixture?.status?.short;
+
+      // Live scores for in-progress group matches
+      const isLive = ['1H', 'HT', '2H', 'ET', 'BT', 'P'].includes(status);
+      if (isLive && fixture.goals?.home != null && fixture.goals?.away != null) {
+        await supabase.from('match_results').upsert({
+          match_id: ourMatch.id,
+          home_score: fixture.goals.home,
+          away_score: fixture.goals.away,
+        }, { onConflict: 'match_id', ignoreDuplicates: false });
+        output.live_scores_updated++;
+      }
+
+      // Final results
       if (['FT', 'AET', 'PEN'].includes(status)) {
         const homeScore = fixture.goals?.home;
         const awayScore = fixture.goals?.away;
 
-        // For knockout matches (AET/PEN), result is always home or away (winner advances)
-        // For group matches (FT), draw is possible
         let result;
-        if (status === 'AET' || status === 'PEN') {
-          // Knockout: use penalty shootout winner if available, otherwise goal difference
-          const penHome = fixture.score?.penalty?.home;
-          const penAway = fixture.score?.penalty?.away;
-          if (penHome != null && penAway != null) {
-            result = penHome > penAway ? 'home' : 'away';
-          } else {
-            result = homeScore > awayScore ? 'home' : 'away';
+        if (homeScore > awayScore) result = 'home';
+        else if (awayScore > homeScore) result = 'away';
+        else result = 'draw';
+
+        if (!decidedMatchIds.has(ourMatch.id)) {
+          const { error } = await supabase.from('match_results').upsert({
+            match_id: ourMatch.id,
+            result,
+            home_score: homeScore,
+            away_score: awayScore,
+          }, { onConflict: 'match_id' });
+
+          if (error) output.errors.push({ matchId: ourMatch.id, type: 'result', error: error.message });
+          else {
+            output.results_updated++;
+            decidedMatchIds.add(ourMatch.id);
           }
-        } else {
-          // Group stage: normal result
-          if (homeScore > awayScore) result = 'home';
-          else if (awayScore > homeScore) result = 'away';
-          else result = 'draw';
-        }
-
-        const { error } = await supabase.from('match_results').upsert({
-          match_id: ourMatch.id,
-          result,
-          home_score: homeScore,
-          away_score: awayScore,
-        }, { onConflict: 'match_id' });
-
-        if (error) output.errors.push({ matchId: ourMatch.id, type: 'result', error: error.message });
-        else {
-          output.results_updated++;
-          decidedMatchIds.add(ourMatch.id); // Track newly decided matches
         }
       }
     }
@@ -237,9 +361,7 @@ export async function GET(request) {
           const drawOdds = parseFloat(values.find(v => v.value === 'Draw')?.odd || 0);
           const awayOdds = parseFloat(values.find(v => v.value === 'Away')?.odd || 0);
 
-      if (homeOdds > 0 && drawOdds > 0 && awayOdds > 0) {
-            // Apply 10% boost to make EV positive (removes bookmaker vig + adds edge)
-            const ODDS_BOOST = 1.10;
+          if (homeOdds > 0 && drawOdds > 0 && awayOdds > 0) {
             const { error } = await supabase.from('match_odds').upsert({
               match_id: ourMatch.id,
               home_odds: Math.round(homeOdds * ODDS_BOOST * 100) / 100,
@@ -257,42 +379,36 @@ export async function GET(request) {
     }
 
     // --- AUTO-BET: 1pt on favorite for missed knockout picks ---
-    // Find knockout matches that have kicked off but don't have results yet, or just got results
-    const { data: knockoutMatches } = await supabase.from('knockout_matches').select('*');
+    const { data: allKnockoutMatches } = await supabase.from('knockout_matches').select('*');
     const { data: allOdds } = await supabase.from('match_odds').select('*');
     const oddsMap = {};
     (allOdds || []).forEach(o => { oddsMap[o.match_id] = o; });
 
-    if (knockoutMatches && knockoutMatches.length > 0) {
-      // Get all active users (anyone who has made at least one pick)
+    if (allKnockoutMatches && allKnockoutMatches.length > 0) {
       const { data: activeUsers } = await supabase
         .from('picks')
         .select('user_id')
         .limit(1000);
       const uniqueUserIds = [...new Set((activeUsers || []).map(p => p.user_id))];
 
-      // Get all existing knockout picks
       const { data: existingKoPicks } = await supabase
         .from('picks')
         .select('user_id, match_id')
         .eq('is_knockout', true);
       const koPickSet = new Set((existingKoPicks || []).map(p => `${p.user_id}:${p.match_id}`));
 
-      for (const koMatch of knockoutMatches) {
-        // Only auto-bet on matches that have kicked off
+      for (const koMatch of allKnockoutMatches) {
         const kickoff = new Date(koMatch.kickoff);
         if (isNaN(kickoff.getTime()) || new Date() < kickoff) continue;
 
         const matchOdds = oddsMap[koMatch.match_id];
         if (!matchOdds) continue;
 
-        // Determine the favorite (lower odds = favorite)
         const favorite = matchOdds.home_odds <= matchOdds.away_odds ? 'home' : 'away';
 
-        // Auto-bet for each user who hasn't picked this match
         for (const userId of uniqueUserIds) {
           const key = `${userId}:${koMatch.match_id}`;
-          if (koPickSet.has(key)) continue; // Already has a pick
+          if (koPickSet.has(key)) continue;
 
           const { error } = await supabase.from('picks').insert({
             user_id: userId,
@@ -306,7 +422,7 @@ export async function GET(request) {
             output.errors.push({ matchId: koMatch.match_id, userId, type: 'auto_bet', error: error.message });
           } else if (!error) {
             output.auto_bets_placed++;
-            koPickSet.add(key); // Don't re-bet
+            koPickSet.add(key);
           }
         }
       }
