@@ -1,33 +1,37 @@
 // Centralized balance calculations for the picks tracker
 //
-// How scoring works:
-// - Every pick costs its wager amount (1pt for groups, variable for knockouts)
-// - If correct: you get back wager × odds (so net profit = wager × (odds - 1))
-// - If wrong: you lose the wager
-// - Balance = sum of all net results across all matches
+// Group stage: correct = wager × odds, wrong = 0
+// Knockout: correct = (wager × odds) - wager (net profit), wrong = -wager (lose stake)
 
-// Calculate total balance from all resolved picks
-// For each resolved match:
-//   correct pick: + wager × odds - wager  (you get payout minus cost)
-//   wrong pick:   - wager                  (you lose your stake)
-// For unresolved: no effect on balance yet (pending wagers tracked separately)
+// Total balance from all resolved picks
 export function calculateTotalEarned(picks, results, odds) {
   return Object.entries(picks).reduce((total, [matchId, pick]) => {
     const result = results[matchId];
-    if (!result || !result.result) return total; // not yet decided
+    if (!result || !result.result) return total;
     const matchOdds = odds[matchId];
     if (!matchOdds) return total;
     const wager = pick.wager ?? 1;
 
     if (pick.pick === result.result) {
-      // Correct: net profit = (wager × odds) - wager
+      // Correct pick
       const oddsValue = pick.pick === 'home' ? matchOdds.home_odds
         : pick.pick === 'draw' ? matchOdds.draw_odds
         : matchOdds.away_odds;
-      return total + (wager * (oddsValue || 1)) - wager;
+      if (pick.is_knockout) {
+        // Knockout: profit = (wager × odds) - wager
+        return total + (wager * (oddsValue || 1)) - wager;
+      } else {
+        // Group: full payout = wager × odds (no deduction)
+        return total + wager * (oddsValue || 1);
+      }
     } else {
-      // Wrong: lose the wager
-      return total - wager;
+      // Wrong pick
+      if (pick.is_knockout) {
+        // Knockout: lose the wager
+        return total - wager;
+      }
+      // Group: no penalty
+      return total;
     }
   }, 0);
 }
@@ -37,7 +41,7 @@ export function calculatePendingWagers(picks, results) {
   return Object.entries(picks).reduce((total, [matchId, pick]) => {
     if (!pick.is_knockout) return total;
     const result = results[matchId];
-    if (result && result.result) return total; // already resolved
+    if (result && result.result) return total;
     return total + (pick.wager ?? 1);
   }, 0);
 }
@@ -49,13 +53,13 @@ export function calculateAvailableBalance(picks, results, odds) {
   return Math.max(0, earned - pending);
 }
 
-// Display balance (what shows in the header) = total earned (not subtracting pending)
+// Display balance (what shows in the header) = total earned
 export function calculateDisplayBalance(picks, results, odds) {
   const earned = calculateTotalEarned(picks, results, odds);
   return Math.max(0, earned);
 }
 
-// Check if a user is eliminated (balance is 0 and at least one knockout match has been decided)
+// Check if a user is eliminated
 export function isEliminated(picks, results, odds) {
   const hasKnockoutResults = Object.entries(picks).some(
     ([matchId, pick]) => pick.is_knockout && results[matchId]?.result
