@@ -135,7 +135,7 @@ export default function LeaderboardView({ leaderboard, currentUserId, leagueMemb
           ) : null;
 
           const wager = pick.wager ?? 1;
-          const payout = correct && oddsValue ? (wager * oddsValue) - wager : 0;
+          const payout = correct && oddsValue ? wager * oddsValue : 0;          
           
           // Round label for knockout matches
           const roundLabel = m.isKnockout ? m.id.split('-')[0] : null;
