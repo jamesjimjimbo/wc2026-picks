@@ -135,7 +135,10 @@ export default function LeaderboardView({ leaderboard, currentUserId, leagueMemb
           ) : null;
 
           const wager = pick.wager ?? 1;
-          const payout = correct && oddsValue ? wager * oddsValue : 0;          
+          const delta = correct && oddsValue
+            ? (m.isKnockout ? wager * oddsValue - wager : wager * oddsValue)
+            : wrong && m.isKnockout ? -wager
+            : 0;
           
           // Round label for knockout matches
           const roundLabel = m.isKnockout ? m.id.split('-')[0] : null;
@@ -162,8 +165,10 @@ export default function LeaderboardView({ leaderboard, currentUserId, leagueMemb
                 <span className="text-[9px] text-text-muted font-mono">{wager}pt</span>
               )}
               {result?.result && (
-                <span className={`font-bold font-mono ${correct ? 'text-brand-green' : 'text-red-400'}`}>
-                  {correct ? `+${payout.toFixed(1)}` : `-${wager.toFixed(1)}`}
+                <span className={`font-bold font-mono ${
+                  delta > 0 ? 'text-brand-green' : delta < 0 ? 'text-red-400' : 'text-text-muted'
+                }`}>
+                  {delta > 0 ? `+${delta.toFixed(1)}` : delta < 0 ? delta.toFixed(1) : '0'}
                 </span>
               )}
               {!result?.result && (
