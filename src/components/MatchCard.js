@@ -29,11 +29,15 @@ export default function MatchCard({ match, pick, odds, result, onPick, isKnockou
   const awayOdds = odds?.away_odds;
 
   const wager = pick?.wager ?? 1;
-  const payout = correct ? (
+  const wonOdds = correct ? (
     pick.pick === 'home' ? homeOdds :
     pick.pick === 'draw' ? drawOdds :
     awayOdds
   ) : 0;
+  const delta = correct
+    ? (isKnockout ? wager * wonOdds - wager : wager * wonOdds)
+    : wrong && isKnockout ? -wager
+    : 0;
 
   const selectedOdds = pick?.pick === 'home' ? homeOdds :
     pick?.pick === 'draw' ? drawOdds :
@@ -49,9 +53,13 @@ export default function MatchCard({ match, pick, odds, result, onPick, isKnockou
       {/* Result badge */}
       {result && (
         <div className={`text-center py-1 text-[10px] font-bold tracking-wider rounded-t-xl ${
-          correct ? 'bg-brand-green-light text-brand-green-dark' : 'bg-red-50 text-red-500'
+          delta > 0 ? 'bg-brand-green-light text-brand-green-dark'
+          : delta < 0 ? 'bg-red-50 text-red-500'
+          : 'bg-surface-secondary text-text-muted'
         }`}>
-          {correct ? `✓ +${(payout * wager).toFixed(1)} PTS` : `✗ -${wager.toFixed(1)} PTS`}
+          {delta > 0 ? `✓ +${delta.toFixed(1)} PTS`
+          : delta < 0 ? `✗ -${wager.toFixed(1)} PTS`
+          : `0 PTS`}
         </div>
       )}
 
